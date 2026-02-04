@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClearSwarm - Web Interface</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <!-- Google Fonts - Roboto -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <!-- vis-network for graph visualization -->
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <nav class="top-nav">
+            <div class="nav-brand"><img src="/static/favicon.svg" alt="ClearSwarm" class="nav-logo"> ClearSwarm</div>
+            <div class="nav-links">
+                <a href="/static/index.html" class="nav-link active">Runner</a>
+                <a href="/static/editor.html" class="nav-link">Editor</a>
+            </div>
+        </nav>
+
+        <header>
+            <h1>Agent Runner</h1>
+            <p class="subtitle">Monitor and manage your intelligent agents</p>
+            <div class="status-bar">
+                <span class="status-indicator" id="connectionStatus">
+                    <span class="dot offline"></span> Connecting...
+                </span>
+                <span class="running-agents" id="runningAgents">
+                    Running: <strong>0</strong>
+                </span>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <!-- Left Panel: Agent Launcher -->
+            <aside class="left-panel">
+                <div class="panel">
+                    <h2>Launch Agent</h2>
+                    <form id="launchForm">
+                        <div class="form-group">
+                            <label for="agentSelect">Select Agent:</label>
+                            <select id="agentSelect" required>
+                                <option value="">Loading agents...</option>
+                            </select>
+                            <p class="agent-description" id="agentDescription"></p>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="messageInput">Message:</label>
+                            <textarea
+                                id="messageInput"
+                                rows="4"
+                                placeholder="Enter your message for the agent..."
+                                required
+                            ></textarea>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">
+                            Launch Agent
+                        </button>
+                    </form>
+
+                    <div id="launchStatus" class="launch-status"></div>
+                </div>
+
+                <div class="panel">
+                    <h3>Available Agents</h3>
+                    <div id="agentsList" class="agents-list">
+                        Loading...
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Right Panel: Execution Monitor -->
+            <main class="right-panel">
+                <div class="panel">
+                    <div class="panel-header">
+                        <h2>Execution Monitor</h2>
+                        <div class="panel-actions">
+                            <button class="btn btn-small btn-danger" id="stopAllBtn">
+                                Stop All
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="tabs">
+                        <button class="tab-btn active" data-tab="roots">Root Executions</button>
+                        <button class="tab-btn" data-tab="all">All Executions</button>
+                        <button class="tab-btn" data-tab="running">Running</button>
+                    </div>
+
+                    <div class="tab-content active" id="rootsTab">
+                        <div id="rootExecutionsList" class="executions-list">
+                            Loading executions...
+                        </div>
+                    </div>
+
+                    <div class="tab-content" id="allTab">
+                        <div id="allExecutionsList" class="executions-list">
+                            Loading executions...
+                        </div>
+                    </div>
+
+                    <div class="tab-content" id="runningTab">
+                        <div id="runningExecutionsList" class="executions-list">
+                            No running agents
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Execution Details Panel (initially hidden) -->
+                <div class="panel" id="executionDetails" style="display: none;">
+                    <div class="panel-header">
+                        <h2>Execution Details</h2>
+                        <button class="btn btn-small" id="closeDetailsBtn">Close</button>
+                    </div>
+                    <div id="executionDetailsContent">
+                        <!-- Details will be loaded here -->
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Modal for execution tree -->
+    <div id="treeModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Execution Tree</h2>
+                <button class="btn btn-small" id="closeModalBtn">Close</button>
+            </div>
+            <div id="treeContent" class="tree-content">
+                Loading tree...
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for interactive graph visualization -->
+    <div id="graphModal" class="modal">
+        <div class="modal-content graph-modal-content">
+            <div class="modal-header graph-header">
+                <h2>ClearSwarm Visualizer</h2>
+                <div class="graph-controls">
+                    <button class="btn btn-small" id="toggleLayoutBtn" onclick="toggleLayoutType()" title="Switch layout type">
+                        Physics
+                    </button>
+                    <button class="btn btn-small" onclick="fitGraphView()" title="Fit to screen">
+                        Fit
+                    </button>
+                    <button class="btn btn-small" onclick="resetGraphPhysics()" title="Reset physics">
+                        Reset
+                    </button>
+                    <button class="btn btn-small" id="togglePhysicsBtn" onclick="toggleGraphPhysics()" title="Toggle physics">
+                        Disable Physics
+                    </button>
+                    <span class="graph-controls-separator"></span>
+                    <button class="btn btn-small" onclick="exportGraphImage()" title="Export as image">
+                        Export
+                    </button>
+                    <button class="btn btn-small btn-danger" onclick="stopCurrentExecutionTree()" title="Stop agents in this execution tree">
+                        Stop
+                    </button>
+                    <button class="btn btn-small btn-danger" onclick="closeGraphModal()">
+                        Close
+                    </button>
+                </div>
+            </div>
+            <div id="graphStats" class="graph-stats-container">
+                <!-- Statistics will be populated here -->
+            </div>
+
+            <!-- Main graph area: 70% graph + 30% node details -->
+            <div class="graph-main-panel">
+                <!-- Left side: Graph (70%) -->
+                <div id="graphContainer" class="graph-container">
+                    <!-- Graph will be rendered here -->
+                </div>
+
+                <!-- Right side: Node Details (30%) -->
+                <div class="graph-node-details">
+                    <div class="node-details-header">
+                        <div class="node-details-title">Node Details</div>
+                        <button class="btn-clear-logs" onclick="clearNodeLogs()" title="Clear selection">×</button>
+                    </div>
+                    <div id="nodeLogs" class="node-details-content">
+                        <div class="node-logs-empty">
+                            Click on any node in the graph to view its execution details
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/toast.js"></script>
+    <script src="/static/js/main.js"></script>
+    <script src="/static/js/tree.js"></script>
+    <script src="/static/js/graph.js"></script>
+    <script src="/static/js/websocket.js"></script>
+</body>
+</html>

@@ -1,0 +1,1 @@
+Fetches web page content from a given URL and provides a concise 3-sentence summary of what the page is about.

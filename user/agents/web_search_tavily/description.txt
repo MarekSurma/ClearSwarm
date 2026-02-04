@@ -1,0 +1,1 @@
+Performs web searches on a given topic using Tavily Search API, retrieves relevant results with content snippets, and provides a comprehensive answer based on all gathered information. Supports filtering by topic (general, news, finance) and time range.

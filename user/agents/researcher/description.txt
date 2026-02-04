@@ -1,0 +1,1 @@
+Research agent that conducts comprehensive analysis by coordinating multiple specialized agents. Performs data gathering, calculations, text analysis, and report generation.

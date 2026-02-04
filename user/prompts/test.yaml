@@ -1,0 +1,11 @@
+# Test prompts file with only partial configuration
+system_prompts:
+  available_tools_header: |
+
+    ## 🛠 NARZĘDZIA DOSTĘPNE 🛠
+
+    Masz dostęp do następujących narzędzi:
+
+
+log_messages:
+  agent_start: "▶ Uruchamiam agenta: {agent_name} (ID: {agent_id})"

@@ -1,0 +1,296 @@
+# Default prompts configuration for multi-agent system
+# All prompts used by agents are defined here for easy customization
+#
+# Variables that can be used in prompts:
+# - {tool_list} - list of available tools with descriptions
+# - {agent_name} - name of the current agent
+# - {pending_count} - number of pending tasks
+# - {task_list} - list of pending task IDs
+# - {task_id} - specific task ID
+# - {tool_name} - name of the tool being called
+# - {result} - result from tool/agent execution
+# - {parameters} - parameters passed to tool
+# - {error_details} - error message details
+
+# System prompt sections
+system_prompts:
+  # Header for available tools section
+  available_tools_header: |
+
+    ## Available Tools
+
+    You have access to the following tools:
+
+
+  # Template for individual tool description (regular tool)
+  tool_description_template: |
+    ### {tool_name}
+    {description}
+
+    Parameters:
+
+  # Template for tool with no parameters
+  tool_no_parameters: |
+      No parameters
+
+  # Template for tool parameter line
+  tool_parameter_line: "  - {param_name} ({param_type}){required}: {param_description}\n"
+
+  # Template for agent (sub-agent) description
+  agent_description_template: |
+    ### {tool_name} (Agent)
+    {description}
+
+    Parameters:
+      - message (string) (required): Message or query to send to the agent
+
+
+  # Tool calling format instructions
+  tool_calling_format: |
+
+    ## Tool Calling Format
+
+    To call a tool or agent, you MUST use this EXACT XML format:
+
+    <tool_call>
+    <tool_name>name_of_tool</tool_name>
+    <call_mode>synchronous|asynchronous</call_mode>  <!-- OPTIONAL: defaults to 'synchronous' -->
+    <parameters>
+    {"param1": "value1", "param2": "value2"}
+    </parameters>
+    </tool_call>
+
+
+  # Execution modes explanation
+  execution_modes: |
+    ## Execution Modes
+
+    **synchronous** (default):
+    - Tool executes immediately and blocks until complete
+    - Result is added to conversation immediately
+    - You can use the result in your next response
+    - Use when you NEED the result before continuing (e.g., sequential math operations)
+
+    **asynchronous**:
+    - Tool launches in background, doesn't block
+    - You can continue generating or make more tool calls
+    - Result arrives later via system notification
+    - Use for independent tasks that can run in parallel
+
+
+  # Examples of tool calls
+  tool_call_examples: |
+    EXAMPLES:
+
+    Example 1 - Synchronous calculator (need result immediately):
+    <tool_call>
+    <tool_name>calculator</tool_name>
+    <call_mode>synchronous</call_mode>
+    <parameters>
+    {"operation": "add", "a": 5, "b": 3}
+    </parameters>
+    </tool_call>
+
+    Example 2 - Asynchronous agent (can run in parallel):
+    <tool_call>
+    <tool_name>researcher</tool_name>
+    <call_mode>asynchronous</call_mode>
+    <parameters>
+    {"message": "Research topic A"}
+    </parameters>
+    </tool_call>
+
+    Example 3 - Multiple synchronous calls (executed in order):
+    <tool_call>
+    <tool_name>calculator</tool_name>
+    <call_mode>synchronous</call_mode>
+    <parameters>
+    {"operation": "add", "a": 25, "b": 25}
+    </parameters>
+    </tool_call>
+    <tool_call>
+    <tool_name>calculator</tool_name>
+    <call_mode>synchronous</call_mode>
+    <parameters>
+    {"operation": "multiply", "a": 123, "b": 50}
+    </parameters>
+    </tool_call>
+
+
+  # Critical rules for tool calling
+  critical_rules: |
+    CRITICAL RULES:
+    - ALWAYS use <tool_name>...</tool_name> tags (NOT custom tags like <calculator> or <math_assistant>)
+    - ALWAYS use <parameters>...</parameters> tags for the JSON
+    - <call_mode> is OPTIONAL - omit it or use 'synchronous' as default
+    - The JSON must use EXACT parameter names as listed above
+    - For synchronous calls: results appear immediately in conversation
+    - For asynchronous calls: results arrive later via system notification
+    - You can mix synchronous and asynchronous calls in one response
+
+
+  # Task management instructions
+  task_management: |
+    ## Task Management and Duplicate Prevention
+
+    When you call tools or agents, each call will be assigned a unique TASK ID. You will be notified immediately when tasks are launched.
+
+    IMPORTANT RULES:
+    - Before creating a new tool/agent call, CHECK if a similar task is already pending
+    - You will see a list of PENDING TASKS before each decision
+    - DO NOT create duplicate tasks for the same goal or topic
+    - WAIT for pending task results before creating similar requests
+    - Each task ID has format: {tool_name}_{{counter}} (e.g., 'math_assistant_1')
+    - When a task completes, you'll receive: 'Task {{task_id}} completed: {{result}}'
+
+
+  # End session instructions
+  end_session_rules: |
+    ## Calling end_session
+    <tool_call>
+    <tool_name>end_session</tool_name>
+    <parameters>
+    {"final_message": "Here goes your final response to the user/caller"}
+    </parameters>
+    </tool_call>
+    
+    ## CRITICAL: When to Call end_session
+
+    **YOU MUST NOT call end_session if there are ANY pending asynchronous tasks!**
+
+    Before calling end_session, verify:
+    1. Check the 'PENDING TASKS' list - it MUST be empty
+    2. All asynchronous tasks you launched have completed and you received their results
+    3. You have processed all task results and incorporated them into your final response
+
+    **WRONG** - Calling end_session while tasks are still running:
+    ```
+    PENDING TASKS: researcher_1, web_summarizer_2 - ❌ FORBIDDEN TO END SESSION!
+    ```
+
+    **CORRECT** - Only call end_session when all tasks are done:
+    ```
+    PENDING TASKS: None - ✓ OK to end session!
+    ```
+
+    If you have pending tasks, you MUST wait for their results before calling end_session.
+
+
+# Runtime messages (system notifications during execution)
+runtime_messages:
+  # Message showing pending tasks to agent
+  pending_tasks_header: |
+    === CURRENTLY PENDING TASKS ===
+
+    You have {pending_count} task(s) running in parallel:
+
+
+  pending_task_item: |
+    Task ID: {task_id}
+      Tool/Agent: {tool_name}
+      Parameters: {parameters}
+      Launched at: {launched_at}
+
+
+  pending_tasks_reminder: |
+    REMINDER: Do NOT create duplicate tasks for the same topic or goal. Wait for these tasks to complete before creating similar requests.
+    ================================
+
+  # Notification when tasks are launched
+  tasks_launched_notification: |
+    SYSTEM NOTIFICATION: The following {task_count} task(s) have been launched:
+    {task_list}
+
+    These tasks are now running asynchronously. You will receive results as they complete. DO NOT create duplicate tasks for the same goals.
+
+  # Task completion notification
+  task_completed: "Task '{task_id}' completed:\n{result}"
+
+  # Tool result (for synchronous calls)
+  tool_result: "Tool '{tool_name}' result:\n{result}"
+
+  # Warning when no tool call detected
+  no_tool_call_warning: |
+    SYSTEM REMINDER: You did not make any tool calls. If you have completed your task, you MUST call the 'end_session' tool to terminate.
+
+    Use this EXACT format:
+    <tool_call>
+    <tool_name>end_session</tool_name>
+    <parameters>
+    {"final_message": "Your final response to the user"}
+    </parameters>
+    </tool_call>
+
+    If you still have work to do, continue with appropriate tool calls using the same XML format.
+
+  # Critical error when trying to end session with pending tasks
+  end_session_with_pending_tasks_error: |
+    ❌ CRITICAL ERROR: You called end_session while {pending_count} asynchronous tasks are still running!
+
+    Pending tasks: {task_list}
+
+    YOU MUST NOT call end_session until ALL pending tasks complete and you receive their results.
+    The end_session call has been IGNORED. Wait for task results before trying again.
+
+    Remember: Check 'PENDING TASKS' list before calling end_session. It must be empty!
+
+# Logging messages (console output)
+log_messages:
+  agent_start_separator: "================================================================================"
+  agent_start: "Starting agent: {agent_name} (ID: {agent_id})"
+  user_message: "User message: {user_message}"
+
+  iteration_separator: "--- Iteration {iteration}/{max_iterations} ---"
+
+  agent_generating: "[Agent: {agent_name}] Generating response..."
+
+  tool_calls_detected: "[{count} Tool Call(s) Detected]"
+  executing_sync_tools: "[Executing {count} synchronous tool call(s)...]"
+  executing_sync_tool: "  Executing (sync): {tool_name} with {parameters}"
+  tool_result_log: "  Result: {result}"
+
+  launching_async_tools: "[Launching {count} asynchronous tool call(s)...]"
+  launching_async_tool: "  Launching (async): {tool_name} with {parameters}"
+  task_launched: "[Task {task_id} launched asynchronously]"
+
+  task_completed_log: "[Task Completed: {task_id}]"
+  task_result_log: "  Result: {result}"
+
+  end_session_called: "[END_SESSION called - agent will terminate after pending tasks complete]"
+  final_response_log: "[Final response to return: {response}]"
+
+  waiting_for_remaining_tasks: "[Waiting for {count} remaining task(s) to complete...]"
+
+  agent_completed_separator: "================================================================================"
+  agent_completed: "Agent completed after {iterations} iteration(s)"
+  session_ended_status: "Session ended explicitly: {status}"
+  log_file_saved: "[Log saved to: {log_file}]"
+
+  # Warnings
+  warning_end_session_with_pending: "[WARNING] Agent attempted to call end_session with {count} pending tasks!"
+  warning_pending_tasks_list: "[WARNING] Pending tasks: {task_list}"
+  warning_no_tool_call: "[WARNING: No tool call detected. Agent should call end_session when done.]"
+  warning_max_iterations: "[WARNING: Max iterations reached without end_session call]"
+  warning_empty_response: "[WARNING: Empty response from LLM]"
+
+  # Errors
+  error_llm_call: "[ERROR] {error_message}"
+  security_violation: "[SECURITY VIOLATION] {error_message}"
+
+  # Info
+  timeout_waiting: "[Timeout waiting for tasks - continuing]"
+
+# Error messages
+error_messages:
+  # Security error when tool not authorized
+  tool_not_authorized: |
+    SECURITY ERROR: Tool/agent '{tool_name}' is not authorized for agent '{agent_name}'. Authorized tools: {authorized_tools}. To use this tool, add it to the file: {tools_file}
+
+  # Tool not found error
+  tool_not_found: "Tool or agent '{tool_name}' not found"
+
+  # Tool execution error
+  tool_execution_error: "Error executing tool/agent '{tool_name}': {error_details}"
+
+  # LLM call error
+  llm_call_error: "Error calling LLM: {error_details}"

@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Network/Agent nodes visualization -->
+  <defs>
+    <linearGradient id="nodeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1976d2"/>
+      <stop offset="100%" style="stop-color:#1565c0"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f57c00"/>
+      <stop offset="100%" style="stop-color:#ff9800"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Connection lines -->
+  <line x1="16" y1="8" x2="8" y2="20" stroke="#555" stroke-width="1.5"/>
+  <line x1="16" y1="8" x2="24" y2="20" stroke="#555" stroke-width="1.5"/>
+  <line x1="8" y1="20" x2="16" y2="26" stroke="#555" stroke-width="1.5"/>
+  <line x1="24" y1="20" x2="16" y2="26" stroke="#555" stroke-width="1.5"/>
+
+  <!-- Central node (root agent) -->
+  <circle cx="16" cy="8" r="5" fill="url(#accentGrad)"/>
+
+  <!-- Sub-agent nodes -->
+  <circle cx="8" cy="20" r="4" fill="url(#nodeGrad)"/>
+  <circle cx="24" cy="20" r="4" fill="url(#nodeGrad)"/>
+
+  <!-- Tool/result node -->
+  <circle cx="16" cy="26" r="3" fill="#388e3c"/>
+</svg>
