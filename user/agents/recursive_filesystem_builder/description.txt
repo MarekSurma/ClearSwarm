@@ -1,1 +1,0 @@
-Receives a json string containing directory structure definition and orchestrates creation of the entire directory tree by delegating to recursive_fileststem_builder agents. If no json is provided, then this agent reads the file and treats the contents as a source data. Returns when done.

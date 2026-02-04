@@ -1,6 +1,0 @@
-market_researcher
-technical_reviewer
-pricing_analyst
-competitor_analyst
-file_writer
-end_session

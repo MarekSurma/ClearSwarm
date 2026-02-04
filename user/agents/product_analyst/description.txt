@@ -1,1 +1,0 @@
-Comprehensive product analysis coordinator that delegates to specialized analysts for market research, technical review, pricing analysis, and competitive analysis. Returns detailed multi-perspective product evaluation.

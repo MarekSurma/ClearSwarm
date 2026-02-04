@@ -1,1 +1,0 @@
-Coordinating agent that can delegate tasks to specialized agents. Recognizes the type of task and forwards it to the appropriate agent.

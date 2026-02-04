@@ -1,1 +1,0 @@
-Reads a JSON file containing directory structure definition and orchestrates creation of the entire directory tree by delegating to dir_creator agents. Returns summary of created structure.

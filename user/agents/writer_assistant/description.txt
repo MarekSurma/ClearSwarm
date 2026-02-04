@@ -1,1 +1,0 @@
-Agent specializing in text creation and analysis. Can analyze texts and save them to files.

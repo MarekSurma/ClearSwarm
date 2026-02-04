@@ -1,1 +1,0 @@
-You answer the question sent by the user and you close session immediately.

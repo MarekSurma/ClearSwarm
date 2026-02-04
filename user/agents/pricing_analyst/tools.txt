@@ -1,3 +1,0 @@
-calculator
-math_assistant
-end_session

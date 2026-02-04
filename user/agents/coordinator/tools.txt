@@ -1,6 +1,0 @@
-math_assistant
-writer_assistant
-researcher
-web_summarizer
-web_fetcher
-end_session

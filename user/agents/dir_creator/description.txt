@@ -1,5 +1,0 @@
-Creates a directory and its immediate contents (files and subdirectories at one level). For subdirectories with nested content, delegates to other dir_creator instances. This enables parallel hierarchical directory structure creation.
-
-Parameters expected in message:
-- base_path: Path where to create the directory structure
-- structure: JSON object defining what to create at this level

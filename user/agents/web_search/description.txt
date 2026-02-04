@@ -1,1 +1,0 @@
-Performs web searches on a given topic using DuckDuckGo, selects the most relevant results, fetches and summarizes content from each page in parallel, and provides a comprehensive answer based on all gathered information.

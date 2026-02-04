@@ -80,7 +80,7 @@ system_prompts:
 
   # Examples of tool calls
   tool_call_examples: |
-    EXAMPLES:
+    EXAMPLES  - (this is NOT a list of tools that are available to you. Tools available to you are in the "Authorized tools" section):
 
     Example 1 - Synchronous calculator (need result immediately):
     <tool_call>
