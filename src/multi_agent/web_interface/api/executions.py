@@ -317,12 +317,12 @@ async def get_execution_graph(agent_id: str):
         # Determine node properties based on type
         if is_root:
             group = 'root'
-            color = '#FFD700'  # Gold
+            color = '#f0d8b0'  # Warm luminous cream - large leukocyte under dark field
             size = 30
             shape = 'dot'
         else:
             group = 'agent'
-            color = '#97C2FC' if is_running else '#6c757d'  # Blue if running, gray if completed
+            color = '#c86840' if is_running else '#5c2818'  # Glowing amber RBC / dimmed dark crimson RBC
             size = 20
             shape = 'dot'
 
@@ -376,7 +376,7 @@ async def get_execution_graph(agent_id: str):
                 id=tool_id,
                 label=tool_name,
                 group='tool',
-                color='#FB7E81' if tool_running else '#999',  # Red if running, gray if completed
+                color='#b8a048' if tool_running else '#4a3820',  # Warm gold platelet / dimmed dark amber platelet
                 shape='diamond',
                 size=15,
                 is_running=tool_running,

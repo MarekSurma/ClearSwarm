@@ -34,24 +34,24 @@ function getGraphOptions(layoutType) {
         nodes: {
             font: {
                 size: 14,
-                color: '#ffffff',
+                color: '#e0c8a8',
                 face: 'monospace'
             },
             borderWidth: 2,
             shadow: {
                 enabled: true,
-                color: 'rgba(0,0,0,0.5)',
-                size: 10,
-                x: 2,
-                y: 2
+                color: 'rgba(180, 100, 50, 0.35)',
+                size: 12,
+                x: 0,
+                y: 0
             }
         },
         edges: {
             width: 2,
             color: {
-                color: '#555555',
-                highlight: '#888888',
-                hover: '#888888'
+                color: '#5a3a28',
+                highlight: '#8a6048',
+                hover: '#8a6048'
             },
             arrows: {
                 to: {
@@ -234,14 +234,14 @@ async function loadGraphData() {
                 runningNodeIds.add(node.id);
             }
             // Determine border color based on state
-            let borderColor = '#666666';  // Default for completed
+            let borderColor = '#6b4030';  // Warm dark border for completed cells
             let borderWidth = 2;
             let shadowConfig = {
                 enabled: true,
-                color: 'rgba(0,0,0,0.5)',
-                size: 10,
-                x: 2,
-                y: 2
+                color: 'rgba(180, 100, 50, 0.4)',
+                size: 15,
+                x: 0,
+                y: 0
             };
 
             if (node.is_running) {
@@ -250,42 +250,41 @@ async function loadGraphData() {
 
                 // Color based on current state with pulsating shadow
                 if (node.current_state === 'generating') {
-                    borderColor = '#f59e0b';  // Orange/yellow for generating
+                    borderColor = '#e89030';  // Warm amber - cell actively metabolizing
                     borderWidth = 4;
-                    // Enhanced pulsating shadow for running nodes
                     shadowConfig = {
                         enabled: true,
-                        color: 'rgba(245, 158, 11, 0.7)',
+                        color: 'rgba(232, 144, 48, 0.7)',
                         size: pulsatingShadowSize,
                         x: 0,
                         y: 0
                     };
                 } else if (node.current_state === 'waiting') {
-                    borderColor = '#06b6d4';  // Cyan for waiting
+                    borderColor = '#a06850';  // Warm muted rose - cell at rest
                     borderWidth = 4;
                     shadowConfig = {
                         enabled: true,
-                        color: 'rgba(6, 182, 212, 0.7)',
+                        color: 'rgba(160, 104, 80, 0.6)',
                         size: pulsatingShadowSize,
                         x: 0,
                         y: 0
                     };
                 } else if (node.current_state === 'executing_tool') {
-                    borderColor = '#3b82f6';  // Blue for executing tool
+                    borderColor = '#c89838';  // Warm golden - cell performing action
                     borderWidth = 4;
                     shadowConfig = {
                         enabled: true,
-                        color: 'rgba(59, 130, 246, 0.7)',
+                        color: 'rgba(200, 152, 56, 0.7)',
                         size: pulsatingShadowSize,
                         x: 0,
                         y: 0
                     };
                 } else {
-                    borderColor = '#ffffff';  // White for other running states
+                    borderColor = '#d0b880';  // Warm cream - generic active cell
                     borderWidth = 4;
                     shadowConfig = {
                         enabled: true,
-                        color: 'rgba(255, 255, 255, 0.7)',
+                        color: 'rgba(208, 184, 128, 0.6)',
                         size: pulsatingShadowSize,
                         x: 0,
                         y: 0
@@ -316,7 +315,7 @@ async function loadGraphData() {
                     border: borderColor,
                     highlight: {
                         background: node.color,
-                        border: '#ffffff'
+                        border: '#f0d8b0'
                     }
                 },
                 borderWidth: borderWidth,
@@ -355,8 +354,8 @@ async function loadGraphData() {
                 dashes: isAsync,  // Dashed for async, solid for sync
                 width: isAsync ? 2 : 3,  // Thinner for async
                 color: {
-                    color: isAsync ? '#888888' : '#555555',  // Lighter for async
-                    highlight: isAsync ? '#aaaaaa' : '#888888'
+                    color: isAsync ? '#7a5840' : '#5a3a28',  // Warmer tones for dark field
+                    highlight: isAsync ? '#a07858' : '#8a6048'
                 },
                 title: `${edge.call_mode === 'asynchronous' ? 'Asynchronous' : 'Synchronous'} call`
             };
