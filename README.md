@@ -4,7 +4,7 @@
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A modular and extensible multi-agent system built in Python that interfaces with LLM models through OpenAI-compatible APIs. Agents can call tools and other agents **asynchronously**, enabling parallel execution with full execution tracking in SQLite.
+A modular and extensible multi-agent system built in Python that interfaces with LLM models through OpenAI-compatible APIs. Agents can call tools and other agents **asynchronously**, enabling parallel execution with execution tracking in SQLite. Synchronous operation is also possible.
 
 A short demo of a swarm solving mathematical calculations.
 [https://github.com/user-attachments/assets/c7220bfe-7335-4853-a25e-55aed56613f](https://github.com/user-attachments/assets/a81c7233-86dc-420b-94fa-48b7175bbbf3)
