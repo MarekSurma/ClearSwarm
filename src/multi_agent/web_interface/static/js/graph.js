@@ -292,6 +292,23 @@ async function loadGraphData() {
                 }
             }
 
+            // Error styling - override border/shadow for nodes with errors
+            if (node.error_count > 0 && !node.is_running) {
+                borderColor = '#c03030';  // Crimson red border for error nodes
+                borderWidth = 3;
+                shadowConfig = {
+                    enabled: true,
+                    color: 'rgba(192, 48, 48, 0.6)',
+                    size: 18,
+                    x: 0,
+                    y: 0
+                };
+            } else if (node.error_count > 0 && node.is_running) {
+                // Running + errors: keep animation but tint red
+                borderColor = '#d04030';  // Red-amber for running with errors
+                shadowConfig.color = 'rgba(208, 64, 48, 0.7)';
+            }
+
             // Enhanced label with state indicator for agents
             let enhancedLabel = node.label;
             if (node.is_running && node.current_state && node.group !== 'tool') {
@@ -304,6 +321,11 @@ async function loadGraphData() {
                     stateIndicator = '🔧';  // Executing tool
                 }
                 enhancedLabel = `${stateIndicator} ${node.label}`;
+            }
+
+            // Add error badge to label
+            if (node.error_count > 0) {
+                enhancedLabel = `⚠️ ${node.error_count}\n${enhancedLabel}`;
             }
 
             const visNode = {
@@ -379,6 +401,9 @@ async function loadGraphData() {
 function createNodeTooltip(node) {
     // Get clean node name (remove state indicators)
     const nodeName = node.label.replace(/[⚡⏳🔧]\s*/g, '');
+    if (node.error_count > 0) {
+        return `${nodeName}\n⚠️ ${node.error_count} error${node.error_count > 1 ? 's' : ''}`;
+    }
     return nodeName;
 }
 
@@ -389,6 +414,17 @@ function updateGraphStats(graphData) {
     const tools = graphData.nodes.filter(n => n.group === 'tool').length;
     const running = graphData.nodes.filter(n => n.is_running).length;
     const completed = graphData.nodes.filter(n => !n.is_running).length;
+    const totalErrors = graphData.nodes.reduce((sum, n) => sum + (n.error_count || 0), 0);
+
+    let errorsHtml = '';
+    if (totalErrors > 0) {
+        errorsHtml = `
+            <div class="stat-item">
+                <span class="stat-label">Errors:</span>
+                <span class="stat-value status-error">${totalErrors}</span>
+            </div>
+        `;
+    }
 
     const statsHtml = `
         <div class="graph-stats">
@@ -412,6 +448,7 @@ function updateGraphStats(graphData) {
                 <span class="stat-label">Completed:</span>
                 <span class="stat-value status-completed">${completed}</span>
             </div>
+            ${errorsHtml}
         </div>
     `;
 
@@ -580,7 +617,7 @@ async function loadNodeDetails(nodeId) {
     // Check if this is a tool or agent node
     const node = graphNodes.get(nodeId);
     const isToolNode = node && node.group === 'tool';
-    selectedNodeIsRunning = node && node.borderWidth === 4;  // Running nodes have borderWidth 4
+    selectedNodeIsRunning = node && runningNodeIds.has(nodeId);
 
     // Show loading state only on first load (no cached data)
     if (!lastLogData) {
@@ -623,7 +660,7 @@ function startNodeDetailsRefresh() {
 
         // Check if node is still running
         const node = graphNodes.get(selectedNodeId);
-        const isStillRunning = node && node.borderWidth === 4;
+        const isStillRunning = node && runningNodeIds.has(selectedNodeId);
 
         if (!isStillRunning) {
             // Node completed - do one final refresh and stop
@@ -862,44 +899,15 @@ function createMessageHtml(msg, idx) {
         roleColor = '#8b5cf6';
     }
 
-    // Make system messages collapsible (collapsed by default)
-    if (role === 'system') {
-        const previewText = content.length > 80
-            ? content.substring(0, 80) + '...'
-            : content;
-        const messageId = `system-msg-${idx}`;
-
-        return `
-            <div class="conversation-message ${roleClass} collapsible-message">
-                <div class="collapsible-header" onclick="toggleSystemMessage('${messageId}')">
-                    <div class="conversation-header" style="margin-bottom: 0;">
-                        <span style="color: ${roleColor};">${roleIcon} ${role}</span>
-                        <span class="conversation-index">#${idx + 1}</span>
-                    </div>
-                    <button class="collapsible-toggle" id="${messageId}-toggle">
-                        <span class="toggle-icon">▼</span>
-                        <span class="toggle-text">Show</span>
-                    </button>
-                </div>
-                <div class="collapsible-preview" id="${messageId}-preview">
-                    ${escapeHtml(previewText)}
-                </div>
-                <div class="collapsible-content" id="${messageId}-content">
-                    <div class="conversation-content">${escapeHtml(content)}</div>
-                </div>
+    return `
+        <div class="conversation-message ${roleClass}">
+            <div class="conversation-header">
+                <span style="color: ${roleColor};">${roleIcon} ${role}</span>
+                <span class="conversation-index">#${idx + 1}</span>
             </div>
-        `;
-    } else {
-        return `
-            <div class="conversation-message ${roleClass}">
-                <div class="conversation-header">
-                    <span style="color: ${roleColor};">${roleIcon} ${role}</span>
-                    <span class="conversation-index">#${idx + 1}</span>
-                </div>
-                <div class="conversation-content">${escapeHtml(content)}</div>
-            </div>
-        `;
-    }
+            <div class="conversation-content">${escapeHtml(content)}</div>
+        </div>
+    `;
 }
 
 // Scroll node logs container to bottom
@@ -944,12 +952,11 @@ function displayToolLogs(tool) {
     `;
 
     if (tool.result) {
-        const result = tool.result.substring(0, 300);
         html += `
             <div class="node-log-section">
                 <div class="node-log-label">Result</div>
                 <div class="node-log-interactions">
-                    ${escapeHtml(result)}${tool.result.length > 300 ? '...' : ''}
+                    ${escapeHtml(tool.result)}
                 </div>
             </div>
         `;

@@ -14,12 +14,13 @@ class EndSession(BaseTool):
     @property
     def description(self) -> str:
         return (
-            "Call this tool when you have completed your task and are ready to end the session. "
+            "Call this tool when you have completed your task and are ready to end the session. Whole end message HAS TO go to the final_message field.\n"
+            "You MUST not return anything outside of the end_session tool call. Whole message has to go into the final_message section."
             "You should call this ONLY when:\n"
-            "- You have fully answered the user's request\n"
+            "- You know how to answer the user's request\n"
             "- All necessary sub-tasks are complete\n"
-            "- You have provided your final response to the user\n"
-            "- You have no more work to do"
+            "- You have no more work to do\n"
+            "- you place your HWOLE answer in the final_message parameter"
         )
 
     def execute(self, final_message: str = "") -> str:
@@ -27,7 +28,7 @@ class EndSession(BaseTool):
         Execute the end session action.
 
         Args:
-            final_message: Optional final message to the user before ending
+            final_message: Mandatory final message to the user before ending
 
         Returns:
             Confirmation that session is ending

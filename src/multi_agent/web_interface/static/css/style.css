@@ -769,6 +769,11 @@ header h1 {
     color: var(--success-color);
 }
 
+.stat-value.status-error {
+    color: #c03030;
+    font-weight: 600;
+}
+
 /* Node Details Panel (Right side, 30%) */
 .graph-node-details {
     background: var(--surface-elevated);
@@ -966,8 +971,7 @@ header h1 {
     background: var(--surface-hover);
     padding: 12px;
     border-radius: 4px;
-    max-height: 400px;
-    overflow-y: auto;
+    max-height: none;
 }
 
 /* Role-specific border colors */

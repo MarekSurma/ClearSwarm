@@ -267,6 +267,7 @@ class GraphNode(BaseModel):
     size: int
     is_running: bool
     current_state: Optional[str]
+    error_count: int = 0
 
 
 class GraphEdge(BaseModel):
@@ -282,6 +283,18 @@ class GraphData(BaseModel):
     """Complete graph data for visualization."""
     nodes: List[GraphNode]
     edges: List[GraphEdge]
+
+
+def _is_error_result(result: str) -> bool:
+    """Check if a tool execution result indicates an error."""
+    if not result:
+        return False
+    return (
+        result.startswith("Error: ") or
+        result.startswith("Error ") or
+        result.startswith("SECURITY ERROR") or
+        (result.startswith("Tool or agent") and "not found" in result)
+    )
 
 
 @router.get("/executions/{agent_id}/graph", response_model=GraphData)
@@ -329,6 +342,13 @@ async def get_execution_graph(agent_id: str):
         # Create label with agent name and short ID
         label = f"{exec_data['agent_name']}\n[{agent_id[:8]}]"
 
+        # Count errors from tool executions for this agent
+        agent_tool_execs = db.get_tool_executions(agent_id)
+        agent_error_count = sum(
+            1 for t in agent_tool_execs
+            if _is_error_result(t.get('result', '') or '')
+        )
+
         # Add node
         nodes.append(GraphNode(
             id=agent_id,
@@ -338,7 +358,8 @@ async def get_execution_graph(agent_id: str):
             shape=shape,
             size=size,
             is_running=is_running,
-            current_state=current_state
+            current_state=current_state,
+            error_count=agent_error_count
         ))
 
         # Add edge from parent (if not root)
@@ -370,6 +391,7 @@ async def get_execution_graph(agent_id: str):
 
             tool_id = tool['tool_execution_id']
             tool_running = tool['is_running']
+            tool_has_error = _is_error_result(tool.get('result', '') or '')
 
             # Tool node
             nodes.append(GraphNode(
@@ -380,7 +402,8 @@ async def get_execution_graph(agent_id: str):
                 shape='diamond',
                 size=15,
                 is_running=tool_running,
-                current_state=None
+                current_state=None,
+                error_count=1 if tool_has_error else 0
             ))
 
             # Tool edge - dashed if async, solid if sync

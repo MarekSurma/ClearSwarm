@@ -40,7 +40,7 @@ class PromptLoader:
             'task_completed': "Task '{task_id}' completed:\n{result}",
             'tool_result': "Tool '{tool_name}' result:\n{result}",
             'no_tool_call_warning': 'SYSTEM REMINDER: You must call end_session to terminate.\n\n<tool_call>\n<tool_name>end_session</tool_name>\n<parameters>\n{"final_message": "Your response"}\n</parameters>\n</tool_call>\n',
-            'end_session_with_pending_tasks_error': '❌ CRITICAL ERROR: You called end_session with {pending_count} pending tasks!\n\nPending: {task_list}\n\nend_session call IGNORED.\n'
+            'end_session_with_pending_tasks_error': 'Error: You called end_session with {pending_count} pending tasks!\n\nPending: {task_list}\n\nend_session call IGNORED.\n'
         },
         'log_messages': {
             'agent_start_separator': '=' * 80,
@@ -75,7 +75,7 @@ class PromptLoader:
         },
         'error_messages': {
             'tool_not_authorized': "SECURITY ERROR: Tool/agent '{tool_name}' is not authorized for agent '{agent_name}'. Authorized tools: {authorized_tools}. To use this tool, add it to the file: {tools_file}",
-            'tool_not_found': "Tool or agent '{tool_name}' not found",
+            'tool_not_found': "Error: Tool or agent '{tool_name}' not found",
             'tool_execution_error': "Error executing tool/agent '{tool_name}': {error_details}",
             'llm_call_error': "Error calling LLM: {error_details}"
         }

@@ -100,7 +100,7 @@ function handleWebSocketMessage(message) {
                 `Running: <strong>${message.count}</strong>`;
 
             // If auto-refresh is off, still update the data
-            if (!autoRefresh) {
+            if (!autoRefreshInterval) {
                 executions = executions.map(exec => {
                     const runningAgent = message.agents.find(a => a.agent_id === exec.agent_id);
                     if (runningAgent) {
@@ -123,7 +123,7 @@ function handleWebSocketMessage(message) {
         case 'agent_update':
             console.log('Agent update:', message.agent_id);
             // Refresh executions if auto-refresh is on
-            if (autoRefresh) {
+            if (autoRefreshInterval) {
                 loadExecutions();
             }
             break;

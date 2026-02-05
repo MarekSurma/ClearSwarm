@@ -134,7 +134,7 @@ class AgentDatabase:
             cursor = conn.cursor()
             cursor.execute("""
                 UPDATE agent_executions
-                SET completed_at = ?
+                SET completed_at = ?, current_state = 'completed'
                 WHERE agent_id = ?
             """, (completed_at, agent_id))
             conn.commit()

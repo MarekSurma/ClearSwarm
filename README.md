@@ -56,6 +56,7 @@ The system includes a graphical web interface for agent management:
 Then open in browser: [http://localhost:8000](http://localhost:8000)
 
 > ⚠️ **SECURITY WARNING**
+> This application has been coded by using AI agents. The author put all possible effort to make it as safe as possible, but is aware of missing parts and vulnerabilities. The application does not create danger as is, but has a potential to introduce danger if it gets extended with tools that are not prepared to be safe. At this stage the application allows to organize simple interactions between agents based purely on their answers.
 >
 > The web interface has **no authentication** and provides full access to agent execution, including the ability to run arbitrary tools. By default, it binds to `127.0.0.1` (localhost only) for security reasons.
 >

@@ -43,7 +43,7 @@ class ToolCallHandler:
             parameters_str = match.group(3).strip()
 
             try:
-                parameters = json.loads(parameters_str)
+                parameters = json.loads(parameters_str, strict=False)
                 tool_calls.append({
                     'tool_name': tool_name,
                     'call_mode': call_mode,

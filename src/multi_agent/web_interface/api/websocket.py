@@ -83,7 +83,10 @@ async def websocket_updates(websocket: WebSocket):
         }, websocket)
 
         # Keep connection alive and send updates periodically
-        last_execution_count = len(executions)
+        last_execution_snapshot = {
+            e['agent_id']: (e['completed_at'], e.get('current_state', 'generating'))
+            for e in executions
+        }
 
         while True:
             try:
@@ -96,9 +99,15 @@ async def websocket_updates(websocket: WebSocket):
             # Get current state
             current_executions = db.get_all_executions()
 
+            # Build current snapshot for comparison
+            current_snapshot = {
+                e['agent_id']: (e['completed_at'], e.get('current_state', 'generating'))
+                for e in current_executions
+            }
+
             # Check if there are new executions or status changes
-            if len(current_executions) != last_execution_count:
-                last_execution_count = len(current_executions)
+            if current_snapshot != last_execution_snapshot:
+                last_execution_snapshot = current_snapshot
 
                 # Send update
                 await manager.send_personal({

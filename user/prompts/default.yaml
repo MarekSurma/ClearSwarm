@@ -217,7 +217,7 @@ runtime_messages:
     <tool_call>
     <tool_name>end_session</tool_name>
     <parameters>
-    {"final_message": "Your final response to the user"}
+    {"final_message": "Your ENTIRE (full) final response to the user"}
     </parameters>
     </tool_call>
 
