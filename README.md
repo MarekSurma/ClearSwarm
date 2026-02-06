@@ -32,7 +32,7 @@ pip install -r requirements.txt
 2. Configure `.env` file with your API credentials:
 ```bash
 cp .env.example .env
-# Edit .env with your settings
+# Edit .env with your settings (it has been preconfigured for openrouter - you just have to paste in your API key)
 ```
 
 ```
