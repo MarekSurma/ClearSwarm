@@ -6,7 +6,7 @@
 A modular and extensible multi-agent system built in Python that interfaces with LLM models through OpenAI-compatible APIs. Agents can call tools and other agents **asynchronously**, enabling parallel execution with execution tracking in SQLite. Synchronous operation is also possible.
 
 A short demo of a swarm solving mathematical calculations.
-[https://github.com/user-attachments/assets/c7220bfe-7335-4853-a25e-55aed56613f](https://github.com/user-attachments/assets/a81c7233-86dc-420b-94fa-48b7175bbbf3)
+[https://github.com/user-attachments/assets/3da4159e-aa28-4f9e-ba85-cd175c41002b](https://github.com/user-attachments/assets/3da4159e-aa28-4f9e-ba85-cd175c41002b)
 
 ## Features
 
