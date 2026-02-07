@@ -17,7 +17,7 @@ We take the security of ClearSwarm seriously. If you discover a security vulnera
 
 ### DO
 
-1. **Email** the security issue to: [multi-agent@example.com]
+1. **Email** the security issue to: [marek.surma@terabyterain.com]
    - Replace with your actual security contact email
 
 2. **Include** in your report:
