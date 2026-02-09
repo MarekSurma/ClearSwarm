@@ -3,13 +3,18 @@ LLM Client interface and implementations.
 Provides abstraction layer for LLM API calls with dependency injection support.
 """
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Dict, Any, Tuple, Optional, Callable
 import asyncio
 import threading
+import time
 from datetime import datetime
 from openai import OpenAI
 
 from .config import Config
+
+# How often (in seconds) to save partial streamed content to the log file.
+# This makes streaming progress visible to the web frontend between polls.
+STREAM_LOG_INTERVAL_SECONDS = 1.0
 
 
 # Global flag for graceful shutdown
@@ -47,7 +52,8 @@ class LLMClient(ABC):
         self,
         messages: List[Dict[str, str]],
         model: str,
-        temperature: float = 0.7
+        temperature: float = 0.7,
+        on_stream_update: Optional[Callable[[str], None]] = None
     ) -> Tuple[str, str]:
         """
         Generate a streaming response from the LLM.
@@ -56,6 +62,7 @@ class LLMClient(ABC):
             messages: List of conversation messages
             model: Model identifier
             temperature: Sampling temperature
+            on_stream_update: Optional callback called periodically with partial content during streaming
 
         Returns:
             Tuple of (response_content, model_used)
@@ -86,7 +93,8 @@ class OpenAILLMClient(LLMClient):
         self,
         messages: List[Dict[str, str]],
         model: str,
-        temperature: float = 0.7
+        temperature: float = 0.7,
+        on_stream_update: Optional[Callable[[str], None]] = None
     ) -> Tuple[str, str]:
         """
         Generate a streaming response from OpenAI API.
@@ -95,6 +103,7 @@ class OpenAILLMClient(LLMClient):
             messages: List of conversation messages
             model: Model identifier
             temperature: Sampling temperature
+            on_stream_update: Optional callback called periodically with partial content during streaming
 
         Returns:
             Tuple of (response_content, model_used)
@@ -112,6 +121,7 @@ class OpenAILLMClient(LLMClient):
             # Collect streamed response
             response_content = ""
             response_model = None
+            last_update_time = time.time()
 
             try:
                 for chunk in stream:
@@ -133,6 +143,12 @@ class OpenAILLMClient(LLMClient):
                     # Save model info from first chunk
                     if not response_model and hasattr(chunk, 'model'):
                         response_model = chunk.model
+
+                    # Periodic streaming update for live log monitoring
+                    now = time.time()
+                    if on_stream_update and response_content and (now - last_update_time) >= STREAM_LOG_INTERVAL_SECONDS:
+                        on_stream_update(response_content)
+                        last_update_time = now
 
                 print()  # New line after streaming
             except Exception as e:
@@ -167,7 +183,8 @@ class MockLLMClient(LLMClient):
         self,
         messages: List[Dict[str, str]],
         model: str,
-        temperature: float = 0.7
+        temperature: float = 0.7,
+        on_stream_update: Optional[Callable[[str], None]] = None
     ) -> Tuple[str, str]:
         """
         Return a mock response.
@@ -176,6 +193,7 @@ class MockLLMClient(LLMClient):
             messages: List of conversation messages
             model: Model identifier
             temperature: Sampling temperature
+            on_stream_update: Optional callback (unused in mock)
 
         Returns:
             Tuple of (response_content, model_used)

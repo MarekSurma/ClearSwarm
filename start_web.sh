@@ -6,6 +6,11 @@ echo "=========================================="
 echo "  ClearSwarm - Web Interface"
 echo "=========================================="
 echo ""
+echo "TIP: For frontend development with hot-reload:"
+echo "  1. Run this script for the API server"
+echo "  2. In another terminal: make frontend-dev"
+echo "  3. Open http://localhost:5173 (Vite dev server)"
+echo ""
 
 # Check if dependencies are installed
 if ! python -c "import fastapi" 2>/dev/null; then

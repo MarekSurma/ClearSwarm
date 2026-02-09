@@ -79,3 +79,8 @@ CLAUDE.md
 tmp/
 temp/
 scratchpad/
+
+# Frontend (Vue)
+node_modules/
+src/multi_agent/web_interface/frontend/node_modules/
+src/multi_agent/web_interface/dist/

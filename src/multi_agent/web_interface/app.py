@@ -13,8 +13,11 @@ from contextlib import asynccontextmanager
 from .api import agents, executions, websocket
 from ..core.llm_client import request_shutdown, reset_shutdown
 
-# Static files directory
-STATIC_DIR = Path(__file__).parent / "static"
+# Determine which directory to serve frontend from
+# Priority: dist/ (Vue build output) > static/ (legacy vanilla JS)
+_DIST_DIR = Path(__file__).parent / "dist"
+_STATIC_DIR = Path(__file__).parent / "static"
+STATIC_DIR = _DIST_DIR if _DIST_DIR.exists() else _STATIC_DIR
 
 
 def _signal_handler(signum, frame):
@@ -64,6 +67,15 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 @app.get("/", response_class=HTMLResponse)
 async def root():
     """Serve main HTML page."""
+    index_file = STATIC_DIR / "index.html"
+    if index_file.exists():
+        return index_file.read_text(encoding='utf-8')
+    return "<h1>ClearSwarm Web Interface</h1><p>index.html not found</p>"
+
+
+@app.get("/editor", response_class=HTMLResponse)
+async def editor_spa():
+    """SPA catch-all for Vue Router /editor route."""
     index_file = STATIC_DIR / "index.html"
     if index_file.exists():
         return index_file.read_text(encoding='utf-8')

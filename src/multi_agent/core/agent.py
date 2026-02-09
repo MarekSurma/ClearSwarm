@@ -291,11 +291,16 @@ class Agent:
         self._log(self.prompts.get_log_message('agent_generating', agent_name=self.config.name))
 
         try:
+            def _on_stream_update(partial_content: str):
+                """Save partial streamed content to log for live monitoring."""
+                self._save_log_file(streaming_content=partial_content)
+
             # Use injected LLM client
             response_content, response_model = await self.llm_client.generate_stream(
                 messages=self.messages,
                 model=Config.OPENAI_MODEL,
-                temperature=0.7
+                temperature=0.7,
+                on_stream_update=_on_stream_update
             )
 
             if not response_content:
@@ -459,12 +464,27 @@ class Agent:
             return error_msg
 
 
-    def _save_log_file(self):
-        """Save interaction log to file."""
+    def _save_log_file(self, streaming_content: str = None):
+        """
+        Save interaction log to file.
+
+        Args:
+            streaming_content: If provided, appends a temporary assistant message
+                with this partial content and a "streaming": true flag, so the
+                web frontend can display in-progress LLM output.
+        """
         try:
             # Populate interactions from current messages
             # This is a flat array of all messages in conversation order
             self.interaction_log["interactions"] = self.messages.copy()
+
+            if streaming_content is not None:
+                self.interaction_log["interactions"].append({
+                    "role": "assistant",
+                    "content": streaming_content,
+                    "timestamp": datetime.now().isoformat(),
+                    "streaming": True
+                })
 
             with open(self.log_file, 'w', encoding='utf-8') as f:
                 json.dump(self.interaction_log, f, indent=2, ensure_ascii=False)

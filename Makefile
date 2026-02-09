@@ -1,14 +1,19 @@
-.PHONY: install test lint format clean help
+.PHONY: install test lint format clean help frontend-install frontend-build frontend-dev
+
+FRONTEND_DIR = src/multi_agent/web_interface/frontend
 
 help:
 	@echo "Available commands:"
-	@echo "  make install       - Install package in development mode"
-	@echo "  make install-dev   - Install with development dependencies"
-	@echo "  make test          - Run tests with pytest"
-	@echo "  make lint          - Run code linters (flake8, pylint, mypy)"
-	@echo "  make format        - Format code with black and isort"
-	@echo "  make clean         - Remove build artifacts and cache files"
-	@echo "  make run           - Run agent (usage: make run AGENT=name MESSAGE='text')"
+	@echo "  make install          - Install package in development mode"
+	@echo "  make install-dev      - Install with development dependencies"
+	@echo "  make test             - Run tests with pytest"
+	@echo "  make lint             - Run code linters (flake8, pylint, mypy)"
+	@echo "  make format           - Format code with black and isort"
+	@echo "  make clean            - Remove build artifacts and cache files"
+	@echo "  make run              - Run agent (usage: make run AGENT=name MESSAGE='text')"
+	@echo "  make frontend-install - Install frontend dependencies"
+	@echo "  make frontend-build   - Build frontend for production"
+	@echo "  make frontend-dev     - Start frontend dev server"
 
 install:
 	pip install -e .
@@ -40,3 +45,12 @@ run:
 		exit 1; \
 	fi
 	python -m multi_agent $(AGENT) "$(MESSAGE)"
+
+frontend-install:
+	cd $(FRONTEND_DIR) && npm install
+
+frontend-build:
+	cd $(FRONTEND_DIR) && npm run build
+
+frontend-dev:
+	cd $(FRONTEND_DIR) && npm run dev

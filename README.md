@@ -20,11 +20,12 @@ A short demo of a swarm solving mathematical calculations.
 ## Requirements
 
 - Python 3.8+
+- Node.js 18+ (for building the frontend; Node 22 recommended)
 - Access to an OpenAI-compatible API
 
 ## Installation
 
-1. Install dependencies:
+1. Install Python dependencies:
 ```bash
 pip install -r requirements.txt
 ```
@@ -41,11 +42,19 @@ OPENAI_API_KEY=your-openrouter-api-key-here
 OPENAI_MODEL=qwen/qwen3-vl-8b-instruct
 ```
 
+3. Build the frontend:
+```bash
+make frontend-install   # Install Node dependencies (one-time)
+make frontend-build     # Production build
+```
+
+The build output goes to `src/multi_agent/web_interface/dist/` and is served automatically by FastAPI.
+
 ## Usage
 
 ### Web Interface (GUI)
 
-The system includes a graphical web interface for agent management:
+The web interface is built with Vue 3, TypeScript, and PrimeVue, providing a modern single-page application for agent management.
 
 ```bash
 # Start web interface (from project root)
@@ -53,6 +62,12 @@ The system includes a graphical web interface for agent management:
 ```
 
 Then open in browser: [http://localhost:8000](http://localhost:8000)
+
+For frontend development with hot-reload (two terminals):
+```bash
+./start_web.sh          # Terminal 1: FastAPI backend on :8000
+make frontend-dev       # Terminal 2: Vite dev server on :5173 with proxy
+```
 
 > ⚠️ **SECURITY WARNING**
 > This application has been coded by using AI agents. The author put all possible effort to make it as safe as possible, but is aware of missing parts and vulnerabilities. The application does not create danger as is, but has a potential to introduce danger if it gets extended with tools that are not prepared to be safe. At this stage the application allows to organize simple interactions between agents based purely on their answers.
@@ -178,6 +193,17 @@ python -m multi_agent coordinator "Calculate revenues Jan=12000, Feb=15000, Mar=
 │   │   └── config.py       # Environment config
 │   ├── tools/              # Tool system
 │   └── web_interface/      # FastAPI web UI
+│       ├── app.py          # FastAPI app (serves API + frontend)
+│       ├── api/            # REST API endpoints
+│       ├── frontend/       # Vue 3 + TypeScript source
+│       │   ├── src/
+│       │   │   ├── components/  # Vue components
+│       │   │   ├── composables/ # Reactive composables
+│       │   │   ├── pages/       # Page views (Runner, Editor)
+│       │   │   └── types/       # TypeScript type definitions
+│       │   ├── package.json
+│       │   └── vite.config.ts
+│       └── dist/           # Production build output (git-ignored)
 ├── user/                   # User-configurable content
 │   ├── agents/             # Agent configurations
 │   ├── tools/              # Custom tools
@@ -291,15 +317,28 @@ flake8 src/ tests/
 mypy src/
 ```
 
+### Frontend Development
+
+The frontend is a Vue 3 + TypeScript SPA located in `src/multi_agent/web_interface/frontend/`.
+
+```bash
+make frontend-install   # Install Node dependencies
+make frontend-build     # Production build (output to dist/)
+make frontend-dev       # Start Vite dev server with hot-reload
+```
+
 ### Using Makefile
 
 ```bash
-make install      # Install dependencies
-make install-dev  # Install dev dependencies
-make test         # Run tests
-make lint         # Run linters
-make format       # Format code
-make clean        # Clean build artifacts
+make install            # Install Python dependencies
+make install-dev        # Install dev dependencies
+make test               # Run tests
+make lint               # Run linters
+make format             # Format code
+make clean              # Clean build artifacts
+make frontend-install   # Install frontend Node dependencies
+make frontend-build     # Build frontend for production
+make frontend-dev       # Start frontend dev server
 ```
 
 ## Contributing
