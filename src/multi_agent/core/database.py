@@ -79,6 +79,17 @@ class AgentDatabase:
 
             conn.commit()
 
+        # Enable WAL mode for better concurrent write performance
+        self._enable_wal_mode()
+
+    def _enable_wal_mode(self):
+        """Enable Write-Ahead Logging mode for better concurrency."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+            conn.commit()
+
     @contextmanager
     def _get_connection(self):
         """Context manager for database connections."""
