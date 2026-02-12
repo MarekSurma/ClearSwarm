@@ -66,7 +66,9 @@ class Agent:
         llm_client: Optional[LLMClient] = None,
         parent_agent_id: Optional[str] = None,
         parent_agent_name: str = "root",
-        call_mode: str = "synchronous"
+        call_mode: str = "synchronous",
+        project_dir: str = "default",
+        prompt_loader=None
     ):
         """
         Initialize agent.
@@ -79,6 +81,8 @@ class Agent:
             parent_agent_id: ID of parent agent (None if root)
             parent_agent_name: Name of parent agent
             call_mode: Execution mode ('synchronous' or 'asynchronous')
+            project_dir: Project directory for this execution
+            prompt_loader: Prompt loader instance (defaults to global instance)
         """
         self.config = config
         self.tool_loader = tool_loader
@@ -86,9 +90,10 @@ class Agent:
         self.parent_agent_id = parent_agent_id
         self.parent_agent_name = parent_agent_name
         self.call_mode = call_mode
+        self.project_dir = project_dir
 
-        # Get prompt loader instance
-        self.prompts = get_prompt_loader()
+        # Get prompt loader instance (use provided or fallback to global)
+        self.prompts = prompt_loader if prompt_loader is not None else get_prompt_loader()
 
         # Initialize LLM client (with dependency injection support)
         if llm_client is None:
@@ -103,7 +108,8 @@ class Agent:
             agent_name=config.name,
             parent_agent_id=parent_agent_id,
             parent_agent_name=parent_agent_name,
-            call_mode=call_mode
+            call_mode=call_mode,
+            project_dir=project_dir
         )
 
         # Conversation history
@@ -499,7 +505,9 @@ class AgentLoader:
         self,
         agents_dir: str = "user/agents",
         tool_loader: ToolLoader = None,
-        llm_client: Optional[LLMClient] = None
+        llm_client: Optional[LLMClient] = None,
+        prompt_loader=None,
+        project_dir: str = "default"
     ):
         """
         Initialize agent loader.
@@ -508,10 +516,14 @@ class AgentLoader:
             agents_dir: Directory containing agent subdirectories (default: user/agents)
             tool_loader: Tool loader instance
             llm_client: LLM client instance (defaults to OpenAILLMClient)
+            prompt_loader: Prompt loader instance
+            project_dir: Project directory for agent executions
         """
         self.agents_dir = Path(agents_dir)
         self.tool_loader = tool_loader or ToolLoader()
         self.llm_client = llm_client
+        self.prompt_loader = prompt_loader
+        self.project_dir = project_dir
         self._agent_configs: Dict[str, AgentConfig] = {}
         self._load_agent_configs()
 
@@ -567,7 +579,9 @@ class AgentLoader:
             llm_client=self.llm_client,
             parent_agent_id=parent_agent_id,
             parent_agent_name=parent_agent_name,
-            call_mode=call_mode
+            call_mode=call_mode,
+            project_dir=self.project_dir,
+            prompt_loader=self.prompt_loader
         )
 
     def get_available_agents(self) -> List[str]:

@@ -1,0 +1,1 @@
+Makes a code review for a specific file. Run it whenever you finish working on your javascript related task. Pass a filename (with path) of the file that you want to have reviewed. Code reviewer CAN NOT write to file.

@@ -1,7 +1,16 @@
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import AppNav from '@/components/common/AppNav.vue'
 import Toast from 'primevue/toast'
 import ConfirmDialog from 'primevue/confirmdialog'
+import { useProject } from '@/composables/useProject'
+
+const { loadProjects } = useProject()
+
+// Load projects on mount
+onMounted(async () => {
+  await loadProjects()
+})
 </script>
 
 <template>

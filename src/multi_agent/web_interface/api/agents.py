@@ -4,11 +4,14 @@ Agent management API endpoints.
 import asyncio
 import shutil
 from pathlib import Path
-from typing import List, Dict, Optional
-from fastapi import APIRouter, HTTPException
+from typing import List, Dict, Optional, Tuple
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from ...core.agent import AgentLoader
+from ...core.database import get_database
+from ...core.project import ProjectManager
+from ...core.prompts import PromptLoader
 from ...tools.loader import ToolLoader
 
 router = APIRouter()
@@ -36,54 +39,97 @@ async def _get_running_tasks() -> Dict[str, asyncio.Task]:
         return dict(_running_tasks)
 
 
-def get_agents_dir() -> Path:
-    """Get the user agents directory path."""
+# Per-project loader cache
+_project_loaders: Dict[str, Tuple[ToolLoader, AgentLoader, PromptLoader]] = {}
+
+
+def get_project_manager() -> ProjectManager:
+    """Get ProjectManager instance."""
     current_dir = Path.cwd()
-    if (current_dir / "user" / "agents").exists():
-        return current_dir / "user" / "agents"
-    elif (current_dir.parent / "user" / "agents").exists():
-        return current_dir.parent / "user" / "agents"
-    return current_dir / "user" / "agents"
 
-# Initialize loaders (lazy loading)
-_tool_loader: Optional[ToolLoader] = None
-_agent_loader: Optional[AgentLoader] = None
+    # Find user directory
+    if (current_dir / "user").exists():
+        user_dir = current_dir / "user"
+    elif (current_dir.parent / "user").exists():
+        user_dir = current_dir.parent / "user"
+    else:
+        user_dir = current_dir / "user"
+
+    db = get_database()
+    return ProjectManager(user_dir, db)
 
 
-def get_loaders():
-    """Get or initialize tool and agent loaders."""
-    global _tool_loader, _agent_loader
+def get_agents_dir(project_dir: str = "default") -> Path:
+    """
+    Get the agents directory path for a project.
 
-    if _tool_loader is None:
-        # Find project root (where user/ directory is)
-        # When running from src/, go up one level
-        current_dir = Path.cwd()
+    Args:
+        project_dir: Project directory name
 
-        # Try to find user/tools directory
-        if (current_dir / "user" / "tools").exists():
-            tools_dir = str(current_dir / "user" / "tools")
-        elif (current_dir.parent / "user" / "tools").exists():
-            tools_dir = str(current_dir.parent / "user" / "tools")
-        else:
-            tools_dir = "user/tools"  # fallback
+    Returns:
+        Path to agents directory
+    """
+    pm = get_project_manager()
+    return pm.get_agents_dir(project_dir)
 
-        _tool_loader = ToolLoader(tools_dir=tools_dir)
-        _tool_loader.load_tools()
 
-    if _agent_loader is None:
-        # Find agents directory
-        current_dir = Path.cwd()
+def get_loaders(project_dir: str = "default") -> Tuple[ToolLoader, AgentLoader, PromptLoader]:
+    """
+    Get or initialize loaders for a specific project.
 
-        if (current_dir / "user" / "agents").exists():
-            agents_dir = str(current_dir / "user" / "agents")
-        elif (current_dir.parent / "user" / "agents").exists():
-            agents_dir = str(current_dir.parent / "user" / "agents")
-        else:
-            agents_dir = "user/agents"  # fallback
+    Args:
+        project_dir: Project directory name
 
-        _agent_loader = AgentLoader(agents_dir=agents_dir, tool_loader=_tool_loader)
+    Returns:
+        Tuple of (ToolLoader, AgentLoader, PromptLoader)
+    """
+    global _project_loaders
 
-    return _tool_loader, _agent_loader
+    # Return cached loaders if available
+    if project_dir in _project_loaders:
+        return _project_loaders[project_dir]
+
+    # Create new loaders for this project
+    pm = get_project_manager()
+
+    # Get project-specific directories (with fallback for tools/prompts)
+    tools_dir = str(pm.get_tools_dir(project_dir))
+    agents_dir = str(pm.get_agents_dir(project_dir))
+    prompts_dir = str(pm.get_prompts_dir(project_dir))
+
+    # Create loaders
+    tool_loader = ToolLoader(tools_dir=tools_dir)
+    tool_loader.load_tools()
+
+    prompt_loader = PromptLoader(prompts_dir=prompts_dir)
+
+    agent_loader = AgentLoader(
+        agents_dir=agents_dir,
+        tool_loader=tool_loader,
+        prompt_loader=prompt_loader,
+        project_dir=project_dir
+    )
+
+    # Cache and return
+    _project_loaders[project_dir] = (tool_loader, agent_loader, prompt_loader)
+    return tool_loader, agent_loader, prompt_loader
+
+
+def reset_loaders(project_dir: Optional[str] = None):
+    """
+    Clear loader cache for a project or all projects.
+
+    Args:
+        project_dir: Specific project to reset, or None to reset all
+    """
+    global _project_loaders
+
+    if project_dir is None:
+        # Clear all cached loaders
+        _project_loaders.clear()
+    else:
+        # Clear specific project cache
+        _project_loaders.pop(project_dir, None)
 
 
 class AgentInfo(BaseModel):
@@ -131,11 +177,11 @@ class RunAgentResponse(BaseModel):
 
 
 @router.get("/agents", response_model=List[AgentInfo])
-async def list_agents():
-    """List all available agents."""
+async def list_agents(project: str = Query("default")):
+    """List all available agents for a project."""
     # Reset loaders to discover newly added agents from filesystem
-    reset_loaders()
-    _, agent_loader = get_loaders()
+    reset_loaders(project)
+    _, agent_loader, _ = get_loaders(project)
 
     agents = []
     for agent_name in agent_loader.get_available_agents():
@@ -153,9 +199,9 @@ async def list_agents():
 
 
 @router.get("/agents/{agent_name}", response_model=AgentInfo)
-async def get_agent(agent_name: str):
+async def get_agent(agent_name: str, project: str = Query("default")):
     """Get information about a specific agent."""
-    _, agent_loader = get_loaders()
+    _, agent_loader, _ = get_loaders(project)
 
     if not agent_loader.has_agent(agent_name):
         raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' not found")
@@ -169,12 +215,12 @@ async def get_agent(agent_name: str):
 
 
 @router.post("/agents/run", response_model=RunAgentResponse)
-async def run_agent(request: RunAgentRequest):
+async def run_agent(request: RunAgentRequest, project: str = Query("default")):
     """
     Run an agent with a message.
     This starts the agent execution in the background.
     """
-    _, agent_loader = get_loaders()
+    _, agent_loader, _ = get_loaders(project)
 
     if not agent_loader.has_agent(request.agent_name):
         raise HTTPException(
@@ -219,9 +265,9 @@ class StopAllResponse(BaseModel):
 
 
 @router.post("/agents/stop-all", response_model=StopAllResponse)
-async def stop_all_agents():
+async def stop_all_agents(project: str = Query("default")):
     """
-    Stop all running agents.
+    Stop all running agents in a project.
     Cancels all tracked asyncio tasks and marks agents as completed in the database.
     """
     from ...core.database import get_database
@@ -236,7 +282,7 @@ async def stop_all_agents():
 
     # Also mark any running agents in database as completed
     db = get_database()
-    all_executions = db.get_all_executions()
+    all_executions = db.get_all_executions(project_dir=project)
 
     for exec_info in all_executions:
         if exec_info['completed_at'] is None:
@@ -256,12 +302,13 @@ async def stop_all_agents():
 
 
 @router.post("/agents/stop/{root_id}", response_model=StopAllResponse)
-async def stop_agents_by_root(root_id: str):
+async def stop_agents_by_root(root_id: str, project: str = Query("default")):
     """
     Stop all agents belonging to a specific execution tree (root and all children).
 
     Args:
         root_id: The root agent ID of the execution tree to stop
+        project: Project directory (optional, for filtering)
     """
     from ...core.database import get_database
 
@@ -309,9 +356,9 @@ async def stop_agents_by_root(root_id: str):
 
 
 @router.get("/tools")
-async def list_tools():
-    """List all available tools."""
-    tool_loader, _ = get_loaders()
+async def list_tools(project: str = Query("default")):
+    """List all available tools for a project."""
+    tool_loader, _, _ = get_loaders(project)
 
     tools = []
     for tool_name, tool in tool_loader.get_all_tools().items():
@@ -323,17 +370,10 @@ async def list_tools():
     return tools
 
 
-def reset_loaders():
-    """Reset loaders to force reload of agents/tools."""
-    global _tool_loader, _agent_loader
-    _tool_loader = None
-    _agent_loader = None
-
-
 @router.get("/agents/{agent_name}/detail", response_model=AgentDetail)
-async def get_agent_detail(agent_name: str):
+async def get_agent_detail(agent_name: str, project: str = Query("default")):
     """Get detailed information about an agent including system prompt."""
-    agents_dir = get_agents_dir()
+    agents_dir = get_agents_dir(project)
     agent_dir = agents_dir / agent_name
 
     if not agent_dir.exists():
@@ -358,9 +398,9 @@ async def get_agent_detail(agent_name: str):
 
 
 @router.post("/agents", response_model=AgentDetail)
-async def create_agent(request: CreateAgentRequest):
-    """Create a new agent."""
-    agents_dir = get_agents_dir()
+async def create_agent(request: CreateAgentRequest, project: str = Query("default")):
+    """Create a new agent in a project."""
+    agents_dir = get_agents_dir(project)
     agent_dir = agents_dir / request.name
 
     if agent_dir.exists():
@@ -378,7 +418,7 @@ async def create_agent(request: CreateAgentRequest):
         (agent_dir / "tools.txt").write_text('\n'.join(request.tools), encoding='utf-8')
 
         # Reset loaders to pick up new agent
-        reset_loaders()
+        reset_loaders(project)
 
         return AgentDetail(
             name=request.name,
@@ -394,9 +434,9 @@ async def create_agent(request: CreateAgentRequest):
 
 
 @router.put("/agents/{agent_name}", response_model=AgentDetail)
-async def update_agent(agent_name: str, request: UpdateAgentRequest):
-    """Update an existing agent."""
-    agents_dir = get_agents_dir()
+async def update_agent(agent_name: str, request: UpdateAgentRequest, project: str = Query("default")):
+    """Update an existing agent in a project."""
+    agents_dir = get_agents_dir(project)
     agent_dir = agents_dir / agent_name
 
     if not agent_dir.exists():
@@ -408,7 +448,7 @@ async def update_agent(agent_name: str, request: UpdateAgentRequest):
         (agent_dir / "tools.txt").write_text('\n'.join(request.tools), encoding='utf-8')
 
         # Reset loaders to pick up changes
-        reset_loaders()
+        reset_loaders(project)
 
         return AgentDetail(
             name=agent_name,
@@ -421,9 +461,9 @@ async def update_agent(agent_name: str, request: UpdateAgentRequest):
 
 
 @router.delete("/agents/{agent_name}")
-async def delete_agent(agent_name: str):
-    """Delete an agent."""
-    agents_dir = get_agents_dir()
+async def delete_agent(agent_name: str, project: str = Query("default")):
+    """Delete an agent from a project."""
+    agents_dir = get_agents_dir(project)
     agent_dir = agents_dir / agent_name
 
     if not agent_dir.exists():
@@ -433,7 +473,7 @@ async def delete_agent(agent_name: str):
         shutil.rmtree(agent_dir)
 
         # Reset loaders to reflect deletion
-        reset_loaders()
+        reset_loaders(project)
 
         return {"message": f"Agent '{agent_name}' deleted successfully"}
     except Exception as e:

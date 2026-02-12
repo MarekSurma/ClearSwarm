@@ -4,7 +4,7 @@ Execution history API endpoints.
 import json
 from pathlib import Path
 from typing import List, Dict, Optional
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from ...core.database import get_database
@@ -66,10 +66,10 @@ class ExecutionLog(BaseModel):
 
 
 @router.get("/executions", response_model=List[AgentExecution])
-async def list_executions():
-    """List all agent executions."""
+async def list_executions(project: str = Query("default")):
+    """List all agent executions for a project."""
     db = get_database()
-    executions = db.get_all_executions()
+    executions = db.get_all_executions(project_dir=project)
 
     return [
         AgentExecution(
@@ -89,10 +89,10 @@ async def list_executions():
 
 
 @router.get("/executions/roots", response_model=List[AgentExecution])
-async def list_root_executions():
-    """List only root-level agent executions."""
+async def list_root_executions(project: str = Query("default")):
+    """List only root-level agent executions for a project."""
     db = get_database()
-    executions = db.get_all_executions()
+    executions = db.get_all_executions(project_dir=project)
 
     # Filter only root executions (no parent)
     root_executions = [

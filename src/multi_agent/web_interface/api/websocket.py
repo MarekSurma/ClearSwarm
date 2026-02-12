@@ -54,17 +54,17 @@ manager = ConnectionManager()
 
 
 @router.websocket("/updates")
-async def websocket_updates(websocket: WebSocket):
+async def websocket_updates(websocket: WebSocket, project: str = "default"):
     """
     WebSocket endpoint for real-time execution updates.
-    Sends periodic updates about running agents and their status.
+    Sends periodic updates about running agents and their status for a specific project.
     """
     await manager.connect(websocket)
 
     try:
         # Send initial state
         db = get_database()
-        executions = db.get_all_executions()
+        executions = db.get_all_executions(project_dir=project)
 
         await manager.send_personal({
             "type": "initial_state",
@@ -97,7 +97,7 @@ async def websocket_updates(websocket: WebSocket):
                 pass
 
             # Get current state
-            current_executions = db.get_all_executions()
+            current_executions = db.get_all_executions(project_dir=project)
 
             # Build current snapshot for comparison
             current_snapshot = {

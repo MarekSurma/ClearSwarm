@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import ConnectionStatus from '@/components/runner/ConnectionStatus.vue'
 import AgentLauncher from '@/components/runner/AgentLauncher.vue'
 import AgentCard from '@/components/runner/AgentCard.vue'
@@ -8,10 +8,12 @@ import GraphModal from '@/components/graph/GraphModal.vue'
 import { useAgents } from '@/composables/useAgents'
 import { useExecutions } from '@/composables/useExecutions'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { useProject } from '@/composables/useProject'
 
 const { agents, loadAgents } = useAgents()
 const { executions, rootExecutions, runningExecutions, runningCount, loadExecutions, handleWsMessage, startAutoRefresh, stopAutoRefresh } = useExecutions()
 const { isConnected, connect, onMessage, disconnect } = useWebSocket()
+const { currentProject } = useProject()
 
 const graphVisible = ref(false)
 const graphAgentId = ref<string | null>(null)
@@ -27,6 +29,14 @@ onUnmounted(() => {
   stopAutoRefresh()
   disconnect()
 })
+
+// Watch for project changes and reload data
+watch(
+  () => currentProject.value.project_dir,
+  async () => {
+    await Promise.all([loadAgents(), loadExecutions()])
+  }
+)
 
 function openGraph(agentId: string) {
   graphAgentId.value = agentId

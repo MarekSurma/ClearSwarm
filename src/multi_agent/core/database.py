@@ -23,6 +23,15 @@ class AgentDatabase:
         with self._get_connection() as conn:
             cursor = conn.cursor()
 
+            # Projects table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS projects (
+                    project_name TEXT NOT NULL UNIQUE,
+                    project_dir TEXT NOT NULL UNIQUE,
+                    created_at TEXT NOT NULL
+                )
+            """)
+
             # Agent executions table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS agent_executions (
@@ -77,6 +86,20 @@ class AgentDatabase:
             if 'log_file' not in agent_columns:
                 cursor.execute("ALTER TABLE agent_executions ADD COLUMN log_file TEXT")
 
+            # Add project_dir column to agent_executions if it doesn't exist (migration)
+            cursor.execute("PRAGMA table_info(agent_executions)")
+            agent_columns = [col[1] for col in cursor.fetchall()]
+            if 'project_dir' not in agent_columns:
+                cursor.execute("ALTER TABLE agent_executions ADD COLUMN project_dir TEXT DEFAULT 'default'")
+
+            # Seed default project if not exists
+            cursor.execute("SELECT COUNT(*) FROM projects WHERE project_name = 'default'")
+            if cursor.fetchone()[0] == 0:
+                cursor.execute("""
+                    INSERT INTO projects (project_name, project_dir, created_at)
+                    VALUES (?, ?, ?)
+                """, ("default", "default", datetime.now().isoformat()))
+
             conn.commit()
 
         # Enable WAL mode for better concurrent write performance
@@ -104,7 +127,8 @@ class AgentDatabase:
         agent_name: str,
         parent_agent_id: Optional[str] = None,
         parent_agent_name: str = "root",
-        call_mode: str = "synchronous"
+        call_mode: str = "synchronous",
+        project_dir: str = "default"
     ) -> str:
         """
         Create a new agent execution record.
@@ -114,6 +138,7 @@ class AgentDatabase:
             parent_agent_id: ID of parent agent (None if root)
             parent_agent_name: Name of parent agent ("root" if no parent)
             call_mode: Execution mode ('synchronous' or 'asynchronous')
+            project_dir: Project directory for this execution
 
         Returns:
             agent_id: Unique identifier for this execution
@@ -125,9 +150,9 @@ class AgentDatabase:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO agent_executions
-                (agent_id, agent_name, parent_agent_id, parent_agent_name, started_at, completed_at, call_mode)
-                VALUES (?, ?, ?, ?, ?, NULL, ?)
-            """, (agent_id, agent_name, parent_agent_id, parent_agent_name, started_at, call_mode))
+                (agent_id, agent_name, parent_agent_id, parent_agent_name, started_at, completed_at, call_mode, project_dir)
+                VALUES (?, ?, ?, ?, ?, NULL, ?, ?)
+            """, (agent_id, agent_name, parent_agent_id, parent_agent_name, started_at, call_mode, project_dir))
             conn.commit()
 
         return agent_id
@@ -181,7 +206,7 @@ class AgentDatabase:
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT agent_id, agent_name, parent_agent_id, parent_agent_name,
-                       started_at, completed_at, log_file
+                       started_at, completed_at, log_file, project_dir
                 FROM agent_executions
                 WHERE agent_id = ?
             """, (agent_id,))
@@ -195,20 +220,40 @@ class AgentDatabase:
                     'parent_agent_name': row[3],
                     'started_at': row[4],
                     'completed_at': row[5],
-                    'log_file': row[6]
+                    'log_file': row[6],
+                    'project_dir': row[7] if len(row) > 7 else 'default'
                 }
             return None
 
-    def get_all_executions(self) -> List[Dict]:
-        """Get all agent executions."""
+    def get_all_executions(self, project_dir: Optional[str] = None) -> List[Dict]:
+        """
+        Get all agent executions, optionally filtered by project.
+
+        Args:
+            project_dir: Optional project directory to filter by
+
+        Returns:
+            List of agent execution dictionaries
+        """
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
-                SELECT agent_id, agent_name, parent_agent_id, parent_agent_name,
-                       started_at, completed_at, current_state, call_mode, log_file
-                FROM agent_executions
-                ORDER BY started_at DESC
-            """)
+
+            if project_dir:
+                cursor.execute("""
+                    SELECT agent_id, agent_name, parent_agent_id, parent_agent_name,
+                           started_at, completed_at, current_state, call_mode, log_file, project_dir
+                    FROM agent_executions
+                    WHERE project_dir = ?
+                    ORDER BY started_at DESC
+                """, (project_dir,))
+            else:
+                cursor.execute("""
+                    SELECT agent_id, agent_name, parent_agent_id, parent_agent_name,
+                           started_at, completed_at, current_state, call_mode, log_file, project_dir
+                    FROM agent_executions
+                    ORDER BY started_at DESC
+                """)
+
             rows = cursor.fetchall()
 
             return [
@@ -221,7 +266,8 @@ class AgentDatabase:
                     'completed_at': row[5],
                     'current_state': row[6] if len(row) > 6 else 'generating',
                     'call_mode': row[7] if len(row) > 7 else 'synchronous',
-                    'log_file': row[8] if len(row) > 8 else None
+                    'log_file': row[8] if len(row) > 8 else None,
+                    'project_dir': row[9] if len(row) > 9 else 'default'
                 }
                 for row in rows
             ]
@@ -331,6 +377,107 @@ class AgentDatabase:
                 }
                 for row in rows
             ]
+
+    def create_project(self, project_name: str, project_dir: str) -> None:
+        """
+        Create a new project.
+
+        Args:
+            project_name: Display name of the project
+            project_dir: Directory name for the project
+
+        Raises:
+            ValueError: If project already exists
+        """
+        created_at = datetime.now().isoformat()
+
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO projects (project_name, project_dir, created_at)
+                    VALUES (?, ?, ?)
+                """, (project_name, project_dir, created_at))
+                conn.commit()
+        except sqlite3.IntegrityError as e:
+            raise ValueError(f"Project '{project_name}' or directory '{project_dir}' already exists") from e
+
+    def get_all_projects(self) -> List[Dict]:
+        """
+        Get all projects.
+
+        Returns:
+            List of project dictionaries
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT project_name, project_dir, created_at
+                FROM projects
+                ORDER BY created_at ASC
+            """)
+            rows = cursor.fetchall()
+
+            return [
+                {
+                    'project_name': row[0],
+                    'project_dir': row[1],
+                    'created_at': row[2]
+                }
+                for row in rows
+            ]
+
+    def get_project_by_name(self, project_name: str) -> Optional[Dict]:
+        """
+        Get a project by name.
+
+        Args:
+            project_name: Name of the project
+
+        Returns:
+            Project dictionary or None if not found
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT project_name, project_dir, created_at
+                FROM projects
+                WHERE project_name = ?
+            """, (project_name,))
+            row = cursor.fetchone()
+
+            if row:
+                return {
+                    'project_name': row[0],
+                    'project_dir': row[1],
+                    'created_at': row[2]
+                }
+            return None
+
+    def delete_project(self, project_name: str) -> None:
+        """
+        Delete a project.
+
+        Args:
+            project_name: Name of the project to delete
+
+        Raises:
+            ValueError: If trying to delete the default project or project not found
+        """
+        if project_name == "default":
+            raise ValueError("Cannot delete the default project")
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                DELETE FROM projects
+                WHERE project_name = ?
+            """, (project_name,))
+
+            if cursor.rowcount == 0:
+                raise ValueError(f"Project '{project_name}' not found")
+
+            conn.commit()
 
 
 # Global database instance

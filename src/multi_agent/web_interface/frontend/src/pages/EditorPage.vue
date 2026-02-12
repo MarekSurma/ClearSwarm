@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import type { AgentDetail, ToolInfo } from '@/types/agent'
 import { useAgents } from '@/composables/useAgents'
 import { useApi } from '@/composables/useApi'
+import { useProject } from '@/composables/useProject'
 import AgentEditorSidebar from '@/components/editor/AgentEditorSidebar.vue'
 import AgentEditorForm from '@/components/editor/AgentEditorForm.vue'
 
 const { agents, loadAgents } = useAgents()
 const api = useApi()
+const { currentProject } = useProject()
 
 const currentAgent = ref<AgentDetail | null>(null)
 const isNew = ref(false)
@@ -17,6 +19,18 @@ const tools = ref<ToolInfo[]>([])
 onMounted(async () => {
   await Promise.all([loadAgents(), loadTools()])
 })
+
+// Watch for project changes and reload data
+watch(
+  () => currentProject.value.project_dir,
+  async () => {
+    // Close form and reload everything
+    currentAgent.value = null
+    isNew.value = false
+    showForm.value = false
+    await Promise.all([loadAgents(), loadTools()])
+  }
+)
 
 async function loadTools() {
   try {

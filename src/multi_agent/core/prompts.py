@@ -282,12 +282,13 @@ def get_prompt_loader(prompts_file: Optional[str] = None) -> PromptLoader:
     return _prompt_loader
 
 
-def set_prompt_loader(prompts_file: Optional[str] = None):
+def set_prompt_loader(prompts_file: Optional[str] = None, prompts_dir: str = "user/prompts"):
     """
     Set/reset the global PromptLoader instance.
 
     Args:
         prompts_file: Prompts file name to use
+        prompts_dir: Directory containing prompt files
     """
     global _prompt_loader
-    _prompt_loader = PromptLoader(prompts_file=prompts_file)
+    _prompt_loader = PromptLoader(prompts_file=prompts_file, prompts_dir=prompts_dir)

@@ -1,10 +1,12 @@
-import { ref, onUnmounted } from 'vue'
+import { ref, onUnmounted, watch } from 'vue'
 import type { WebSocketMessage } from '@/types/websocket'
+import { useProject } from './useProject'
 
 const MAX_RECONNECT_ATTEMPTS = 10
 
 export function useWebSocket() {
   const isConnected = ref(false)
+  const { currentProject } = useProject()
 
   let ws: WebSocket | null = null
   let reconnectAttempts = 0
@@ -13,7 +15,8 @@ export function useWebSocket() {
 
   function connect() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${protocol}//${window.location.host}/ws/updates`
+    const projectParam = encodeURIComponent(currentProject.value.project_dir)
+    const wsUrl = `${protocol}//${window.location.host}/ws/updates?project=${projectParam}`
 
     try {
       ws = new WebSocket(wsUrl)
@@ -78,6 +81,17 @@ export function useWebSocket() {
   function onMessage(handler: (msg: WebSocketMessage) => void) {
     handlers.push(handler)
   }
+
+  // Watch for project changes and reconnect
+  watch(
+    () => currentProject.value.project_dir,
+    () => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        disconnect()
+        setTimeout(() => connect(), 100)
+      }
+    }
+  )
 
   onUnmounted(() => {
     disconnect()

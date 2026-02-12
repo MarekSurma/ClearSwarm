@@ -10,8 +10,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from contextlib import asynccontextmanager
 
-from .api import agents, executions, websocket
+from .api import agents, executions, websocket, projects
 from ..core.llm_client import request_shutdown, reset_shutdown
+from ..core.database import get_database
+from ..core.project import ProjectManager
 
 # Determine which directory to serve frontend from
 # Priority: dist/ (Vue build output) > static/ (legacy vanilla JS)
@@ -32,6 +34,24 @@ async def lifespan(app: FastAPI):
     # Startup
     print("Starting multi-agent web interface...")
     print(f"Static files directory: {STATIC_DIR}")
+
+    # Validate default project exists
+    current_dir = Path.cwd()
+    if (current_dir / "user").exists():
+        user_dir = current_dir / "user"
+    elif (current_dir.parent / "user").exists():
+        user_dir = current_dir.parent / "user"
+    else:
+        user_dir = current_dir / "user"
+
+    db = get_database()
+    pm = ProjectManager(user_dir, db)
+
+    try:
+        pm.validate_default_exists()
+        print("Default project validated successfully")
+    except ValueError as e:
+        print(f"WARNING: {e}")
 
     # Reset shutdown flag on startup
     reset_shutdown()
@@ -58,6 +78,7 @@ app = FastAPI(
 # Include API routers
 app.include_router(agents.router, prefix="/api", tags=["agents"])
 app.include_router(executions.router, prefix="/api", tags=["executions"])
+app.include_router(projects.router, prefix="/api", tags=["projects"])
 app.include_router(websocket.router, prefix="/ws", tags=["websocket"])
 
 # Mount static files
