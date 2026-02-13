@@ -301,6 +301,14 @@ onUnmounted(() => {
           <i class="pi pi-pencil" />
           Editor
         </router-link>
+        <router-link
+          to="/visual-editor"
+          class="nav-link"
+          :class="{ active: route.name === 'visual-editor' }"
+        >
+          <i class="pi pi-sitemap" />
+          Visual Editor
+        </router-link>
       </div>
     </div>
 

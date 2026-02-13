@@ -103,6 +103,15 @@ async def editor_spa():
     return "<h1>ClearSwarm Web Interface</h1><p>index.html not found</p>"
 
 
+@app.get("/visual-editor", response_class=HTMLResponse)
+async def visual_editor_spa():
+    """SPA catch-all for Vue Router /visual-editor route."""
+    index_file = STATIC_DIR / "index.html"
+    if index_file.exists():
+        return index_file.read_text(encoding='utf-8')
+    return "<h1>ClearSwarm Web Interface</h1><p>index.html not found</p>"
+
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint with debug info."""
