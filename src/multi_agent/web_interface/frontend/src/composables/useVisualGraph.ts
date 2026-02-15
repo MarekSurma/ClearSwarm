@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { Network, DataSet } from 'vis-network/standalone'
 import { useApi } from './useApi'
 import type { AgentDetail, ToolInfo } from '@/types/agent'
+import { GRAPH_COLORS } from '@/config/graphColors'
 
 interface VisNode {
   id: string
@@ -33,26 +34,30 @@ export function useVisualGraph() {
   const agentCache = new Map<string, AgentDetail>()
   const toolCache = new Map<string, ToolInfo>()
 
-  async function initialize(container: HTMLElement, onNodeClick?: (nodeId: string) => void) {
+  async function initialize(container: HTMLElement, onNodeClick?: (nodeId: string) => void, onBackgroundClick?: () => void) {
     nodes = new DataSet([])
     edges = new DataSet([])
     container.innerHTML = ''
 
     const options = {
       nodes: {
-        font: { size: 14, color: '#e0c8a8', face: 'Inter, sans-serif' },
+        font: { size: 14, color: GRAPH_COLORS.font.primary, face: GRAPH_COLORS.font.face },
         borderWidth: 2,
         shadow: {
           enabled: true,
-          color: 'rgba(180, 100, 50, 0.35)',
-          size: 12,
+          color: GRAPH_COLORS.shadows.default,
+          size: GRAPH_COLORS.shadows.defaultSize,
           x: 0,
           y: 0,
         },
       },
       edges: {
         width: 2,
-        color: { color: '#5a3a28', highlight: '#8a6048', hover: '#8a6048' },
+        color: {
+          color: GRAPH_COLORS.edges.default,
+          highlight: GRAPH_COLORS.edges.highlight,
+          hover: GRAPH_COLORS.edges.hover,
+        },
         arrows: { to: { enabled: true, scaleFactor: 0.5 } },
         smooth: { type: 'continuous', roundness: 0.5 },
       },
@@ -90,6 +95,8 @@ export function useVisualGraph() {
     network.on('click', (params: any) => {
       if (params.nodes.length > 0 && onNodeClick) {
         onNodeClick(params.nodes[0])
+      } else if (params.nodes.length === 0 && onBackgroundClick) {
+        onBackgroundClick()
       }
     })
 
@@ -161,20 +168,23 @@ export function useVisualGraph() {
             label: agentName,
             shape: 'box',
             color: {
-              background: '#e89030',
-              border: '#c07020',
-              highlight: { background: '#f0a040', border: '#d08030' },
+              background: GRAPH_COLORS.agent.background,
+              border: GRAPH_COLORS.agent.border,
+              highlight: {
+                background: GRAPH_COLORS.agent.highlightBackground,
+                border: GRAPH_COLORS.agent.highlightBorder,
+              },
             },
             size: isRoot ? 30 : 20,
             borderWidth: isRoot ? 3 : 2,
             shadow: {
               enabled: true,
-              color: isRoot ? 'rgba(232, 144, 48, 0.5)' : 'rgba(232, 144, 48, 0.35)',
-              size: isRoot ? 18 : 12,
+              color: isRoot ? GRAPH_COLORS.agent.rootShadow : GRAPH_COLORS.agent.shadow,
+              size: isRoot ? GRAPH_COLORS.agent.rootShadowSize : GRAPH_COLORS.agent.shadowSize,
               x: 0,
               y: 0,
             },
-            font: { size: isRoot ? 16 : 14, color: '#e0c8a8' },
+            font: { size: isRoot ? 16 : 14, color: GRAPH_COLORS.font.primary },
           })
         }
 
@@ -211,20 +221,23 @@ export function useVisualGraph() {
                 label: toolOrAgent,
                 shape: 'ellipse',
                 color: {
-                  background: '#5a9560',
-                  border: '#4a7850',
-                  highlight: { background: '#6aaf70', border: '#5a9560' },
+                  background: GRAPH_COLORS.tool.background,
+                  border: GRAPH_COLORS.tool.border,
+                  highlight: {
+                    background: GRAPH_COLORS.tool.highlightBackground,
+                    border: GRAPH_COLORS.tool.highlightBorder,
+                  },
                 },
                 size: 15,
                 borderWidth: 2,
                 shadow: {
                   enabled: true,
-                  color: 'rgba(90, 149, 96, 0.35)',
-                  size: 10,
+                  color: GRAPH_COLORS.tool.shadow,
+                  size: GRAPH_COLORS.tool.shadowSize,
                   x: 0,
                   y: 0,
                 },
-                font: { size: 12, color: '#e0c8a8' },
+                font: { size: 12, color: GRAPH_COLORS.font.primary },
               })
             }
 
@@ -263,6 +276,191 @@ export function useVisualGraph() {
       setTimeout(() => {
         network?.fit({ animation: { duration: 800, easingFunction: 'easeInOutQuad' } })
       }, 100)
+    }
+  }
+
+  function addToolNode(parentAgentName: string, toolName: string) {
+    if (!nodes || !edges) return
+
+    const parentNodeId = `agent::${parentAgentName}`
+    const toolNodeId = `tool::${toolName}::from::${parentAgentName}`
+
+    if (!nodes.get(toolNodeId)) {
+      nodes.add({
+        id: toolNodeId,
+        label: toolName,
+        shape: 'ellipse',
+        color: {
+          background: GRAPH_COLORS.tool.background,
+          border: GRAPH_COLORS.tool.border,
+          highlight: {
+            background: GRAPH_COLORS.tool.highlightBackground,
+            border: GRAPH_COLORS.tool.highlightBorder,
+          },
+        },
+        size: 15,
+        borderWidth: 2,
+        shadow: {
+          enabled: true,
+          color: GRAPH_COLORS.tool.shadow,
+          size: GRAPH_COLORS.tool.shadowSize,
+          x: 0,
+          y: 0,
+        },
+        font: { size: 12, color: GRAPH_COLORS.font.primary },
+      })
+    }
+
+    const edgeId = `${parentNodeId}->${toolNodeId}`
+    if (!edges.get(edgeId)) {
+      edges.add({ id: edgeId, from: parentNodeId, to: toolNodeId })
+    }
+  }
+
+  async function addSubAgentNode(parentAgentName: string, subAgentName: string, allAgents: string[]) {
+    if (!nodes || !edges) return
+
+    const parentNodeId = `agent::${parentAgentName}`
+    const subAgentNodeId = `agent::${subAgentName}`
+
+    // Add edge first
+    const edgeId = `${parentNodeId}->${subAgentNodeId}`
+    if (!edges.get(edgeId)) {
+      edges.add({ id: edgeId, from: parentNodeId, to: subAgentNodeId })
+    }
+
+    // If agent node already exists, just the edge is enough
+    if (nodes.get(subAgentNodeId)) return
+
+    // BFS expand the new sub-agent and its children
+    const visited = new Set<string>()
+    // Collect already-present agent nodes to avoid re-expanding
+    nodes.getIds().forEach((id) => {
+      const s = id as string
+      if (s.startsWith('agent::')) visited.add(s.replace('agent::', ''))
+    })
+    // But allow the new sub-agent itself to be processed
+    visited.delete(subAgentName)
+
+    const queue = [subAgentName]
+
+    while (queue.length > 0) {
+      const agentName = queue.shift()!
+      if (visited.has(agentName)) continue
+      visited.add(agentName)
+
+      let agentDetail: AgentDetail
+      try {
+        agentDetail = await api.getAgentDetail(agentName)
+        agentCache.set(agentName, agentDetail)
+      } catch { continue }
+
+      const agentNodeId = `agent::${agentName}`
+      if (!nodes.get(agentNodeId)) {
+        nodes.add({
+          id: agentNodeId,
+          label: agentName,
+          shape: 'box',
+          color: {
+            background: GRAPH_COLORS.agent.background,
+            border: GRAPH_COLORS.agent.border,
+            highlight: {
+              background: GRAPH_COLORS.agent.highlightBackground,
+              border: GRAPH_COLORS.agent.highlightBorder,
+            },
+          },
+          size: 20,
+          borderWidth: 2,
+          shadow: {
+            enabled: true,
+            color: GRAPH_COLORS.agent.shadow,
+            size: GRAPH_COLORS.agent.shadowSize,
+            x: 0,
+            y: 0,
+          },
+          font: { size: 14, color: GRAPH_COLORS.font.primary },
+        })
+      }
+
+      agentDetail.tools.forEach((toolOrAgent) => {
+        if (allAgents.includes(toolOrAgent)) {
+          const childEdgeId = `${agentNodeId}->agent::${toolOrAgent}`
+          if (!edges!.get(childEdgeId)) {
+            edges!.add({ id: childEdgeId, from: agentNodeId, to: `agent::${toolOrAgent}` })
+          }
+          if (!visited.has(toolOrAgent)) queue.push(toolOrAgent)
+        } else {
+          addToolNode(agentName, toolOrAgent)
+        }
+      })
+    }
+  }
+
+  function removeNode(nodeId: string) {
+    if (!nodes || !edges) return
+
+    if (nodeId.startsWith('tool::')) {
+      // Tool nodes: remove the node and its incoming edge
+      const allEdges = edges.get() as VisEdge[]
+      const toRemove = allEdges.filter((e) => e.to === nodeId).map((e) => e.id)
+      edges.remove(toRemove)
+      nodes.remove(nodeId)
+    } else if (nodeId.startsWith('agent::')) {
+      // Agent nodes: remove the incoming edge(s) that were severed.
+      // If the node has no remaining incoming edges, remove it and its orphaned children.
+      removeOrphanedSubtree(nodeId)
+    }
+  }
+
+  function removeEdgeFromParent(nodeId: string, parentAgentName: string) {
+    if (!edges) return
+
+    const parentNodeId = `agent::${parentAgentName}`
+    const allEdges = edges.get() as VisEdge[]
+    const edgeToRemove = allEdges.find((e) => e.from === parentNodeId && e.to === nodeId)
+    if (edgeToRemove) {
+      edges.remove(edgeToRemove.id)
+    }
+
+    // For tool nodes, always remove the node (they're unique per parent)
+    if (nodeId.startsWith('tool::') && nodes) {
+      nodes.remove(nodeId)
+      return
+    }
+
+    // For agent nodes, check if any incoming edges remain
+    if (nodeId.startsWith('agent::')) {
+      removeOrphanedSubtree(nodeId)
+    }
+  }
+
+  function removeOrphanedSubtree(nodeId: string) {
+    if (!nodes || !edges) return
+
+    const allEdges = edges.get() as VisEdge[]
+    const hasIncoming = allEdges.some((e) => e.to === nodeId)
+    if (hasIncoming) return // Still referenced by another parent
+
+    // BFS remove this node and orphaned children
+    const queue = [nodeId]
+    while (queue.length > 0) {
+      const id = queue.shift()!
+
+      // Find outgoing edges and queue children
+      const outgoing = (edges.get() as VisEdge[]).filter((e) => e.from === id)
+      outgoing.forEach((e) => {
+        edges!.remove(e.id)
+        // Check if child has other incoming edges
+        const childIncoming = (edges!.get() as VisEdge[]).some((e2) => e2.to === e.to)
+        if (!childIncoming) {
+          queue.push(e.to)
+        }
+      })
+
+      // Remove any remaining incoming edges and the node itself
+      const incoming = (edges.get() as VisEdge[]).filter((e) => e.to === id)
+      edges.remove(incoming.map((e) => e.id))
+      nodes.remove(id)
     }
   }
 
@@ -307,5 +505,8 @@ export function useVisualGraph() {
     cleanup,
     fitView,
     getParentAgents,
+    addToolNode,
+    addSubAgentNode,
+    removeEdgeFromParent,
   }
 }

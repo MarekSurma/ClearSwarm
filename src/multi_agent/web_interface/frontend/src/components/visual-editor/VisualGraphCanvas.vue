@@ -2,22 +2,30 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import Button from 'primevue/button'
 import { useVisualGraph } from '@/composables/useVisualGraph'
+import { GRAPH_COLORS } from '@/config/graphColors'
 
 const emit = defineEmits<{
   nodeClick: [nodeId: string]
+  deselect: []
 }>()
 
 defineExpose({
   buildGraph,
   fitView,
+  getParentAgents: (nodeId: string) => graph.getParentAgents(nodeId),
+  addToolNode: (parent: string, tool: string) => graph.addToolNode(parent, tool),
+  addSubAgentNode: (parent: string, agent: string, all: string[]) => graph.addSubAgentNode(parent, agent, all),
+  removeEdgeFromParent: (nodeId: string, parent: string) => graph.removeEdgeFromParent(nodeId, parent),
 })
 
 const graph = useVisualGraph()
 const graphContainer = ref<HTMLDivElement | null>(null)
 
+const bgColor = GRAPH_COLORS.background
+
 onMounted(() => {
   if (graphContainer.value) {
-    graph.initialize(graphContainer.value, handleNodeClick)
+    graph.initialize(graphContainer.value, handleNodeClick, handleBackgroundClick)
   }
 })
 
@@ -27,6 +35,10 @@ onUnmounted(() => {
 
 function handleNodeClick(nodeId: string) {
   emit('nodeClick', nodeId)
+}
+
+function handleBackgroundClick() {
+  emit('deselect')
 }
 
 function buildGraph(rootAgentName: string, allAgents: string[]) {
@@ -39,7 +51,7 @@ function fitView() {
 </script>
 
 <template>
-  <div class="visual-graph-canvas">
+  <div class="visual-graph-canvas" :style="{ background: bgColor }">
     <!-- Toolbar -->
     <div class="graph-toolbar">
       <Button
@@ -52,8 +64,10 @@ function fitView() {
       />
     </div>
 
-    <!-- Graph container -->
-    <div ref="graphContainer" class="graph-container" />
+    <!-- Graph area (relative wrapper prevents vis-network resize loop) -->
+    <div class="graph-area">
+      <div ref="graphContainer" class="graph-container" :style="{ background: bgColor }" />
+    </div>
 
     <!-- Loading overlay -->
     <div v-if="graph.isLoading.value" class="loading-overlay">
@@ -70,7 +84,6 @@ function fitView() {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: #0a0a0a;
 }
 
 .graph-toolbar {
@@ -81,10 +94,19 @@ function fitView() {
   background: var(--p-surface-50);
 }
 
-.graph-container {
+.graph-area {
   flex: 1;
-  min-height: 400px;
-  background: #0a0a0a;
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.graph-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
 }
 
 .loading-overlay {

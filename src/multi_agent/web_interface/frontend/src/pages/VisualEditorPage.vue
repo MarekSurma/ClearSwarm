@@ -4,17 +4,16 @@ import type { AgentDetail, AgentInfo, ToolInfo } from '@/types/agent'
 import { useAgents } from '@/composables/useAgents'
 import { useApi } from '@/composables/useApi'
 import { useProject } from '@/composables/useProject'
-import { useVisualGraph } from '@/composables/useVisualGraph'
 import { useToast } from 'primevue/usetoast'
 import AgentEditorSidebar from '@/components/editor/AgentEditorSidebar.vue'
 import VisualGraphCanvas from '@/components/visual-editor/VisualGraphCanvas.vue'
 import NodeActionPanel from '@/components/visual-editor/NodeActionPanel.vue'
 import AgentEditModal from '@/components/visual-editor/AgentEditModal.vue'
+import AgentCreateModal from '@/components/visual-editor/AgentCreateModal.vue'
 
 const { agents, loadAgents } = useAgents()
 const api = useApi()
 const { currentProject } = useProject()
-const graph = useVisualGraph()
 const toast = useToast()
 
 const tools = ref<ToolInfo[]>([])
@@ -24,6 +23,7 @@ const selectedNodeAgentDetail = ref<AgentDetail | null>(null)
 const parentAgents = ref<string[]>([])
 const isRootNode = ref(false)
 const showEditModal = ref(false)
+const showCreateModal = ref(false)
 const graphCanvas = ref<InstanceType<typeof VisualGraphCanvas> | null>(null)
 
 onMounted(async () => {
@@ -88,7 +88,13 @@ async function handleNodeClick(nodeId: string) {
   }
 
   // Get parent agents
-  parentAgents.value = graph.getParentAgents(nodeId)
+  parentAgents.value = graphCanvas.value?.getParentAgents(nodeId) ?? []
+}
+
+function handleDeselect() {
+  selectedNodeId.value = null
+  selectedNodeAgentDetail.value = null
+  parentAgents.value = []
 }
 
 async function handleAddTool(toolName: string) {
@@ -111,7 +117,9 @@ async function handleAddTool(toolName: string) {
       life: 3000,
     })
 
-    await reloadAndRebuild()
+    // Update local detail cache and add node incrementally
+    selectedNodeAgentDetail.value = { ...selectedNodeAgentDetail.value, tools: updatedTools }
+    graphCanvas.value?.addToolNode(agentName, toolName)
   } catch (error: any) {
     toast.add({
       severity: 'error',
@@ -142,7 +150,11 @@ async function handleAddAgent(subAgentName: string) {
       life: 3000,
     })
 
-    await reloadAndRebuild()
+    // Update local detail cache and add node incrementally
+    selectedNodeAgentDetail.value = { ...selectedNodeAgentDetail.value, tools: updatedTools }
+    await loadAgents() // Refresh agent list for allAgents
+    const allAgentNames = agents.value.map((a) => a.name)
+    await graphCanvas.value?.addSubAgentNode(agentName, subAgentName, allAgentNames)
   } catch (error: any) {
     toast.add({
       severity: 'error',
@@ -192,7 +204,11 @@ async function handleRemoveFromParent(parentAgentName: string) {
       life: 3000,
     })
 
-    await reloadAndRebuild()
+    // Remove from graph incrementally
+    const removedNodeId = selectedNodeId.value
+    graphCanvas.value?.removeEdgeFromParent(removedNodeId, parentAgentName)
+    selectedNodeId.value = null
+    selectedNodeAgentDetail.value = null
   } catch (error: any) {
     toast.add({
       severity: 'error',
@@ -204,21 +220,20 @@ async function handleRemoveFromParent(parentAgentName: string) {
 }
 
 async function handleModalSaved() {
-  await reloadAndRebuild()
-}
-
-async function reloadAndRebuild() {
+  // Description/prompt edits don't change graph structure
   await loadAgents()
-
-  // Clear node selection
   selectedNodeId.value = null
   selectedNodeAgentDetail.value = null
+}
 
-  // Rebuild graph
-  if (selectedAgentName.value && graphCanvas.value) {
-    const allAgentNames = agents.value.map((a) => a.name)
-    graphCanvas.value.buildGraph(selectedAgentName.value, allAgentNames)
-  }
+function handleNewAgent() {
+  showCreateModal.value = true
+}
+
+async function handleAgentCreated(agentName: string) {
+  // Reload agents and select the newly created one
+  await loadAgents()
+  selectAgent(agentName)
 }
 </script>
 
@@ -237,7 +252,7 @@ async function reloadAndRebuild() {
             :agents="agents"
             :selectedName="selectedAgentName"
             @select="selectAgent"
-            @new="() => {}"
+            @new="handleNewAgent"
           />
         </div>
       </aside>
@@ -248,6 +263,7 @@ async function reloadAndRebuild() {
           <VisualGraphCanvas
             ref="graphCanvas"
             @node-click="handleNodeClick"
+            @deselect="handleDeselect"
           />
 
           <!-- Node Action Panel -->
@@ -272,6 +288,12 @@ async function reloadAndRebuild() {
       v-model:visible="showEditModal"
       :agentDetail="selectedNodeAgentDetail"
       @saved="handleModalSaved"
+    />
+
+    <!-- Agent Create Modal -->
+    <AgentCreateModal
+      v-model:visible="showCreateModal"
+      @saved="handleAgentCreated"
     />
   </div>
 </template>
@@ -299,8 +321,12 @@ async function reloadAndRebuild() {
   display: grid;
   grid-template-columns: 280px 1fr;
   gap: 1.5rem;
-  align-items: start;
   height: calc(100vh - 180px);
+}
+
+.left-panel {
+  height: 100%;
+  overflow: hidden;
 }
 
 .panel {
@@ -309,6 +335,10 @@ async function reloadAndRebuild() {
   padding: 1.25rem;
   height: 100%;
   overflow-y: auto;
+}
+
+.right-panel {
+  height: 100%;
 }
 
 .graph-wrapper {

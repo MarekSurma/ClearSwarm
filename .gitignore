@@ -66,6 +66,9 @@ dmypy.json
 .claude/
 CLAUDE.md
 
+.kilocode
+AGENTS.md
+
 # Ruff
 .ruff_cache/
 

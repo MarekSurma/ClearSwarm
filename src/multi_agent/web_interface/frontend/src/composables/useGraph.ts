@@ -2,6 +2,7 @@ import { ref, type Ref } from 'vue'
 import { Network, DataSet } from 'vis-network/standalone'
 import type { GraphData, GraphNode, GraphStats } from '@/types/graph'
 import { useApi } from './useApi'
+import { GRAPH_COLORS } from '@/config/graphColors'
 
 const LAYOUT_STORAGE_KEY = 'agentGraphLayoutType'
 const LAYOUT_PHYSICS = 'physics'
@@ -33,19 +34,23 @@ export function useGraph() {
   function getGraphOptions(layout: string) {
     const baseOptions = {
       nodes: {
-        font: { size: 14, color: '#e0c8a8', face: 'monospace' },
+        font: { size: 14, color: GRAPH_COLORS.font.primary, face: GRAPH_COLORS.font.face },
         borderWidth: 2,
         shadow: {
           enabled: true,
-          color: 'rgba(180, 100, 50, 0.35)',
-          size: 12,
+          color: GRAPH_COLORS.shadows.default,
+          size: GRAPH_COLORS.shadows.defaultSize,
           x: 0,
           y: 0,
         },
       },
       edges: {
         width: 2,
-        color: { color: '#5a3a28', highlight: '#8a6048', hover: '#8a6048' },
+        color: {
+          color: GRAPH_COLORS.edges.default,
+          highlight: GRAPH_COLORS.edges.highlight,
+          hover: GRAPH_COLORS.edges.hover,
+        },
         arrows: { to: { enabled: true, scaleFactor: 0.5 } },
       },
       interaction: {
@@ -158,11 +163,11 @@ export function useGraph() {
       graphData.nodes.forEach((node) => {
         if (node.is_running) runningNodeIds.add(node.id)
 
-        let borderColor = '#6b4030'
+        let borderColor = GRAPH_COLORS.borders.default
         let borderWidth = 2
         let shadowConfig = {
           enabled: true,
-          color: 'rgba(180, 100, 50, 0.4)',
+          color: GRAPH_COLORS.shadows.default,
           size: 15,
           x: 0,
           y: 0,
@@ -172,27 +177,57 @@ export function useGraph() {
           const pulsatingSize = getPulsatingShadowSize()
           borderWidth = 4
           if (node.current_state === 'generating') {
-            borderColor = '#e89030'
-            shadowConfig = { enabled: true, color: 'rgba(232, 144, 48, 0.7)', size: pulsatingSize, x: 0, y: 0 }
+            borderColor = GRAPH_COLORS.running.generating.border
+            shadowConfig = {
+              enabled: true,
+              color: GRAPH_COLORS.running.generating.shadow,
+              size: pulsatingSize,
+              x: 0,
+              y: 0,
+            }
           } else if (node.current_state === 'waiting') {
-            borderColor = '#a06850'
-            shadowConfig = { enabled: true, color: 'rgba(160, 104, 80, 0.6)', size: pulsatingSize, x: 0, y: 0 }
+            borderColor = GRAPH_COLORS.running.waiting.border
+            shadowConfig = {
+              enabled: true,
+              color: GRAPH_COLORS.running.waiting.shadow,
+              size: pulsatingSize,
+              x: 0,
+              y: 0,
+            }
           } else if (node.current_state === 'executing_tool') {
-            borderColor = '#c89838'
-            shadowConfig = { enabled: true, color: 'rgba(200, 152, 56, 0.7)', size: pulsatingSize, x: 0, y: 0 }
+            borderColor = GRAPH_COLORS.running.executingTool.border
+            shadowConfig = {
+              enabled: true,
+              color: GRAPH_COLORS.running.executingTool.shadow,
+              size: pulsatingSize,
+              x: 0,
+              y: 0,
+            }
           } else {
-            borderColor = '#d0b880'
-            shadowConfig = { enabled: true, color: 'rgba(208, 184, 128, 0.6)', size: pulsatingSize, x: 0, y: 0 }
+            borderColor = GRAPH_COLORS.running.default.border
+            shadowConfig = {
+              enabled: true,
+              color: GRAPH_COLORS.running.default.shadow,
+              size: pulsatingSize,
+              x: 0,
+              y: 0,
+            }
           }
         }
 
         if (node.error_count > 0 && !node.is_running) {
-          borderColor = '#c03030'
+          borderColor = GRAPH_COLORS.error.border
           borderWidth = 3
-          shadowConfig = { enabled: true, color: 'rgba(192, 48, 48, 0.6)', size: 18, x: 0, y: 0 }
+          shadowConfig = {
+            enabled: true,
+            color: GRAPH_COLORS.error.shadow,
+            size: GRAPH_COLORS.error.shadowSize,
+            x: 0,
+            y: 0,
+          }
         } else if (node.error_count > 0 && node.is_running) {
-          borderColor = '#d04030'
-          shadowConfig.color = 'rgba(208, 64, 48, 0.7)'
+          borderColor = GRAPH_COLORS.error.borderRunning
+          shadowConfig.color = GRAPH_COLORS.error.shadowRunning
         }
 
         let enhancedLabel = node.label
@@ -216,7 +251,7 @@ export function useGraph() {
           color: {
             background: node.color,
             border: borderColor,
-            highlight: { background: node.color, border: '#f0d8b0' },
+            highlight: { background: node.color, border: GRAPH_COLORS.borders.highlight },
           },
           borderWidth,
           shadow: shadowConfig,
@@ -249,8 +284,8 @@ export function useGraph() {
           dashes: isAsync,
           width: isAsync ? 2 : 3,
           color: {
-            color: isAsync ? '#7a5840' : '#5a3a28',
-            highlight: isAsync ? '#a07858' : '#8a6048',
+            color: isAsync ? GRAPH_COLORS.edges.async : GRAPH_COLORS.edges.default,
+            highlight: isAsync ? GRAPH_COLORS.edges.asyncHighlight : GRAPH_COLORS.edges.highlight,
           },
           title: `${isAsync ? 'Asynchronous' : 'Synchronous'} call`,
         }
