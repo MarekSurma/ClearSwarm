@@ -291,15 +291,15 @@ onUnmounted(() => {
           :class="{ active: route.name === 'runner' }"
         >
           <i class="pi pi-play" />
-          Runner
+          Agent Runner
         </router-link>
         <router-link
-          to="/editor"
+          to="/visual-editor"
           class="nav-link"
-          :class="{ active: route.name === 'editor' }"
+          :class="{ active: route.name === 'visual-editor' }"
         >
-          <i class="pi pi-pencil" />
-          Editor
+          <i class="pi pi-sitemap" />
+          Agent Editor
         </router-link>
       </div>
     </div>

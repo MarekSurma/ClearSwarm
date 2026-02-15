@@ -56,8 +56,7 @@ async function stopAll() {
 
     <Tabs value="roots">
       <TabList>
-        <Tab value="roots">Root Executions</Tab>
-        <Tab value="all">All Executions</Tab>
+        <Tab value="roots">All</Tab>
         <Tab value="running">Running</Tab>
       </TabList>
       <TabPanels>
@@ -66,19 +65,6 @@ async function stopAll() {
             <template v-if="rootExecutions.length > 0">
               <ExecutionCard
                 v-for="exec in rootExecutions"
-                :key="exec.agent_id"
-                :execution="exec"
-                @view-graph="emit('viewGraph', $event)"
-              />
-            </template>
-            <p v-else class="empty-text">No executions found</p>
-          </div>
-        </TabPanel>
-        <TabPanel value="all">
-          <div class="execution-list">
-            <template v-if="executions.length > 0">
-              <ExecutionCard
-                v-for="exec in executions"
                 :key="exec.agent_id"
                 :execution="exec"
                 @view-graph="emit('viewGraph', $event)"
