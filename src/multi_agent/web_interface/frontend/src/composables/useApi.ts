@@ -2,6 +2,7 @@ import type { AgentInfo, AgentDetail, CreateAgentRequest, UpdateAgentRequest, Ru
 import type { AgentExecution, ExecutionTree, ExecutionLog, ToolExecution } from '@/types/execution'
 import type { GraphData } from '@/types/graph'
 import type { ProjectInfo, CreateProjectRequest, CloneProjectRequest } from '@/types/project'
+import type { ScheduleInfo, CreateScheduleRequest, UpdateScheduleRequest } from '@/types/schedule'
 import { useProject } from './useProject'
 
 const API_BASE = ''
@@ -93,6 +94,29 @@ export function useApi() {
   const deleteProject = (projectName: string) =>
     request<{ message: string }>(`/api/projects/${encodeURIComponent(projectName)}`, { method: 'DELETE' })
 
+  // Schedules
+  const getSchedules = () => request<ScheduleInfo[]>(withProject('/api/schedules'))
+  const getSchedule = (id: string) => request<ScheduleInfo>(`/api/schedules/${id}`)
+  const createSchedule = (data: CreateScheduleRequest) =>
+    request<ScheduleInfo>(withProject('/api/schedules'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+  const updateSchedule = (id: string, data: UpdateScheduleRequest) =>
+    request<ScheduleInfo>(`/api/schedules/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+  const deleteSchedule = (id: string) =>
+    request<{ status: string; schedule_id: string }>(`/api/schedules/${id}`, { method: 'DELETE' })
+  const toggleSchedule = (id: string) =>
+    request<ScheduleInfo>(`/api/schedules/${id}/toggle`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    })
+
   return {
     getAgents,
     getAgent,
@@ -114,5 +138,11 @@ export function useApi() {
     createProject,
     cloneProject,
     deleteProject,
+    getSchedules,
+    getSchedule,
+    createSchedule,
+    updateSchedule,
+    deleteSchedule,
+    toggleSchedule,
   }
 }

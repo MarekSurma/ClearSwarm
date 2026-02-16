@@ -10,10 +10,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from contextlib import asynccontextmanager
 
-from .api import agents, executions, websocket, projects
+from .api import agents, executions, websocket, projects, schedules
 from ..core.llm_client import request_shutdown, reset_shutdown
 from ..core.database import get_database
 from ..core.project import ProjectManager
+from ..core.scheduler import get_scheduler
 
 # Determine which directory to serve frontend from
 # Priority: dist/ (Vue build output) > static/ (legacy vanilla JS)
@@ -60,11 +61,17 @@ async def lifespan(app: FastAPI):
     signal.signal(signal.SIGINT, _signal_handler)
     signal.signal(signal.SIGTERM, _signal_handler)
 
+    # Start scheduler service
+    await get_scheduler().start()
+
     yield
 
     # Shutdown
     print("Shutting down web interface...")
     request_shutdown()
+
+    # Stop scheduler service
+    await get_scheduler().stop()
 
 
 # Create FastAPI app
@@ -79,6 +86,7 @@ app = FastAPI(
 app.include_router(agents.router, prefix="/api", tags=["agents"])
 app.include_router(executions.router, prefix="/api", tags=["executions"])
 app.include_router(projects.router, prefix="/api", tags=["projects"])
+app.include_router(schedules.router, prefix="/api", tags=["schedules"])
 app.include_router(websocket.router, prefix="/ws", tags=["websocket"])
 
 # Mount static files
@@ -97,6 +105,15 @@ async def root():
 @app.get("/visual-editor", response_class=HTMLResponse)
 async def visual_editor_spa():
     """SPA catch-all for Vue Router /visual-editor route."""
+    index_file = STATIC_DIR / "index.html"
+    if index_file.exists():
+        return index_file.read_text(encoding='utf-8')
+    return "<h1>ClearSwarm Web Interface</h1><p>index.html not found</p>"
+
+
+@app.get("/action-plans", response_class=HTMLResponse)
+async def action_plans_spa():
+    """SPA catch-all for Vue Router /action-plans route."""
     index_file = STATIC_DIR / "index.html"
     if index_file.exists():
         return index_file.read_text(encoding='utf-8')

@@ -62,6 +62,25 @@ class AgentDatabase:
                 )
             """)
 
+            # Schedules table for cyclic agent execution
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS schedules (
+                    schedule_id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    project_dir TEXT NOT NULL DEFAULT 'default',
+                    agent_name TEXT NOT NULL,
+                    message TEXT NOT NULL DEFAULT '',
+                    schedule_type TEXT NOT NULL,
+                    interval_value INTEGER NOT NULL,
+                    start_from TEXT,
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    last_run_at TEXT,
+                    next_run_at TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+            """)
+
             # Add current_state column if it doesn't exist (migration)
             cursor.execute("PRAGMA table_info(agent_executions)")
             columns = [col[1] for col in cursor.fetchall()]
@@ -478,6 +497,371 @@ class AgentDatabase:
                 raise ValueError(f"Project '{project_name}' not found")
 
             conn.commit()
+
+    def create_schedule(
+        self,
+        name: str,
+        project_dir: str,
+        agent_name: str,
+        message: str,
+        schedule_type: str,
+        interval_value: int,
+        start_from: Optional[str] = None,
+        enabled: bool = True
+    ) -> dict:
+        """
+        Create a new schedule.
+
+        Args:
+            name: Name of the schedule
+            project_dir: Project directory
+            agent_name: Name of the agent to run
+            message: Message to send to the agent
+            schedule_type: Type of schedule ('minutes', 'hours', 'weeks')
+            interval_value: Interval value (how many minutes/hours/weeks)
+            start_from: ISO datetime to start from (None = now)
+            enabled: Whether schedule is enabled
+
+        Returns:
+            Dictionary with created schedule details
+        """
+        schedule_id = str(uuid.uuid4())
+        now = datetime.now().isoformat()
+
+        # Calculate next run time
+        next_run_at = self._calculate_next_run(
+            schedule_type, interval_value, start_from, None, now
+        )
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO schedules
+                (schedule_id, name, project_dir, agent_name, message, schedule_type,
+                 interval_value, start_from, enabled, last_run_at, next_run_at,
+                 created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)
+            """, (
+                schedule_id, name, project_dir, agent_name, message, schedule_type,
+                interval_value, start_from, 1 if enabled else 0, next_run_at, now, now
+            ))
+            conn.commit()
+
+        return self.get_schedule(schedule_id)
+
+    def get_schedule(self, schedule_id: str) -> Optional[dict]:
+        """
+        Get a schedule by ID.
+
+        Args:
+            schedule_id: ID of the schedule
+
+        Returns:
+            Dictionary with schedule details or None if not found
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT schedule_id, name, project_dir, agent_name, message,
+                       schedule_type, interval_value, start_from, enabled,
+                       last_run_at, next_run_at, created_at, updated_at
+                FROM schedules
+                WHERE schedule_id = ?
+            """, (schedule_id,))
+            row = cursor.fetchone()
+
+            if row:
+                return {
+                    'schedule_id': row[0],
+                    'name': row[1],
+                    'project_dir': row[2],
+                    'agent_name': row[3],
+                    'message': row[4],
+                    'schedule_type': row[5],
+                    'interval_value': row[6],
+                    'start_from': row[7],
+                    'enabled': bool(row[8]),
+                    'last_run_at': row[9],
+                    'next_run_at': row[10],
+                    'created_at': row[11],
+                    'updated_at': row[12]
+                }
+            return None
+
+    def get_all_schedules(self, project_dir: Optional[str] = None) -> List[dict]:
+        """
+        Get all schedules, optionally filtered by project.
+
+        Args:
+            project_dir: Optional project directory to filter by
+
+        Returns:
+            List of schedule dictionaries
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+
+            if project_dir:
+                cursor.execute("""
+                    SELECT schedule_id, name, project_dir, agent_name, message,
+                           schedule_type, interval_value, start_from, enabled,
+                           last_run_at, next_run_at, created_at, updated_at
+                    FROM schedules
+                    WHERE project_dir = ?
+                    ORDER BY created_at DESC
+                """, (project_dir,))
+            else:
+                cursor.execute("""
+                    SELECT schedule_id, name, project_dir, agent_name, message,
+                           schedule_type, interval_value, start_from, enabled,
+                           last_run_at, next_run_at, created_at, updated_at
+                    FROM schedules
+                    ORDER BY created_at DESC
+                """)
+
+            rows = cursor.fetchall()
+
+            return [
+                {
+                    'schedule_id': row[0],
+                    'name': row[1],
+                    'project_dir': row[2],
+                    'agent_name': row[3],
+                    'message': row[4],
+                    'schedule_type': row[5],
+                    'interval_value': row[6],
+                    'start_from': row[7],
+                    'enabled': bool(row[8]),
+                    'last_run_at': row[9],
+                    'next_run_at': row[10],
+                    'created_at': row[11],
+                    'updated_at': row[12]
+                }
+                for row in rows
+            ]
+
+    def update_schedule(self, schedule_id: str, **fields) -> Optional[dict]:
+        """
+        Update a schedule.
+
+        Args:
+            schedule_id: ID of the schedule
+            **fields: Fields to update (name, agent_name, message, schedule_type,
+                     interval_value, start_from, enabled)
+
+        Returns:
+            Updated schedule dictionary or None if not found
+        """
+        # Get current schedule
+        current = self.get_schedule(schedule_id)
+        if not current:
+            return None
+
+        # Update fields
+        allowed_fields = {
+            'name', 'agent_name', 'message', 'schedule_type',
+            'interval_value', 'start_from', 'enabled'
+        }
+        updates = {k: v for k, v in fields.items() if k in allowed_fields}
+
+        if not updates:
+            return current
+
+        # If schedule timing changed, recalculate next_run_at
+        timing_changed = any(k in updates for k in ['schedule_type', 'interval_value', 'start_from'])
+        if timing_changed:
+            schedule_type = updates.get('schedule_type', current['schedule_type'])
+            interval_value = updates.get('interval_value', current['interval_value'])
+            start_from = updates.get('start_from', current['start_from'])
+
+            next_run_at = self._calculate_next_run(
+                schedule_type, interval_value, start_from,
+                current['last_run_at'], current['created_at']
+            )
+            updates['next_run_at'] = next_run_at
+
+        # Handle enabled field conversion
+        if 'enabled' in updates:
+            updates['enabled'] = 1 if updates['enabled'] else 0
+
+        updates['updated_at'] = datetime.now().isoformat()
+
+        # Build UPDATE query
+        set_clause = ', '.join(f"{k} = ?" for k in updates.keys())
+        values = list(updates.values()) + [schedule_id]
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"""
+                UPDATE schedules
+                SET {set_clause}
+                WHERE schedule_id = ?
+            """, values)
+            conn.commit()
+
+        return self.get_schedule(schedule_id)
+
+    def delete_schedule(self, schedule_id: str) -> bool:
+        """
+        Delete a schedule.
+
+        Args:
+            schedule_id: ID of the schedule
+
+        Returns:
+            True if deleted, False if not found
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                DELETE FROM schedules
+                WHERE schedule_id = ?
+            """, (schedule_id,))
+            deleted = cursor.rowcount > 0
+            conn.commit()
+            return deleted
+
+    def delete_schedules_for_project(self, project_dir: str) -> int:
+        """
+        Delete all schedules for a project.
+
+        Args:
+            project_dir: Project directory
+
+        Returns:
+            Number of schedules deleted
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                DELETE FROM schedules
+                WHERE project_dir = ?
+            """, (project_dir,))
+            count = cursor.rowcount
+            conn.commit()
+            return count
+
+    def get_due_schedules(self) -> List[dict]:
+        """
+        Get all schedules that are due to run.
+
+        Returns:
+            List of schedule dictionaries that should run now
+        """
+        now = datetime.now().isoformat()
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT schedule_id, name, project_dir, agent_name, message,
+                       schedule_type, interval_value, start_from, enabled,
+                       last_run_at, next_run_at, created_at, updated_at
+                FROM schedules
+                WHERE enabled = 1 AND next_run_at <= ?
+                ORDER BY next_run_at ASC
+            """, (now,))
+
+            rows = cursor.fetchall()
+
+            return [
+                {
+                    'schedule_id': row[0],
+                    'name': row[1],
+                    'project_dir': row[2],
+                    'agent_name': row[3],
+                    'message': row[4],
+                    'schedule_type': row[5],
+                    'interval_value': row[6],
+                    'start_from': row[7],
+                    'enabled': bool(row[8]),
+                    'last_run_at': row[9],
+                    'next_run_at': row[10],
+                    'created_at': row[11],
+                    'updated_at': row[12]
+                }
+                for row in rows
+            ]
+
+    def mark_schedule_run(self, schedule_id: str) -> None:
+        """
+        Mark a schedule as run and calculate next run time.
+
+        Args:
+            schedule_id: ID of the schedule
+        """
+        schedule = self.get_schedule(schedule_id)
+        if not schedule:
+            return
+
+        now = datetime.now().isoformat()
+        next_run_at = self._calculate_next_run(
+            schedule['schedule_type'],
+            schedule['interval_value'],
+            schedule['start_from'],
+            now,  # Use current time as last_run_at
+            schedule['created_at']
+        )
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE schedules
+                SET last_run_at = ?, next_run_at = ?, updated_at = ?
+                WHERE schedule_id = ?
+            """, (now, next_run_at, now, schedule_id))
+            conn.commit()
+
+    def _calculate_next_run(
+        self,
+        schedule_type: str,
+        interval_value: int,
+        start_from: Optional[str],
+        last_run_at: Optional[str],
+        created_at: str
+    ) -> str:
+        """
+        Calculate the next run time for a schedule.
+
+        Args:
+            schedule_type: Type of schedule ('minutes', 'hours', 'weeks')
+            interval_value: Interval value
+            start_from: Optional start time (ISO datetime)
+            last_run_at: Optional last run time (ISO datetime)
+            created_at: Creation time (ISO datetime)
+
+        Returns:
+            ISO datetime string for next run
+        """
+        from datetime import timedelta
+
+        # Determine the interval delta
+        if schedule_type == 'minutes':
+            delta = timedelta(minutes=interval_value)
+        elif schedule_type == 'hours':
+            delta = timedelta(hours=interval_value)
+        elif schedule_type == 'weeks':
+            delta = timedelta(weeks=interval_value)
+        else:
+            raise ValueError(f"Invalid schedule_type: {schedule_type}")
+
+        now = datetime.now()
+
+        # If we have a last run time, simply add the delta
+        if last_run_at:
+            last_run = datetime.fromisoformat(last_run_at)
+            next_run = last_run + delta
+            return next_run.isoformat()
+
+        # Otherwise, calculate from anchor (start_from or created_at)
+        anchor_str = start_from if start_from else created_at
+        anchor = datetime.fromisoformat(anchor_str)
+
+        # Find the first occurrence >= now
+        next_run = anchor
+        while next_run < now:
+            next_run += delta
+
+        return next_run.isoformat()
 
 
 # Global database instance
