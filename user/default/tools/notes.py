@@ -1,6 +1,9 @@
 """
 Notes tool for saving and reading agent notes.
 Notes are stored per-project in output/<project_name>/notes.txt
+
+The project_name is automatically injected by the agent framework via
+BaseTool.set_context() — agents do NOT need to pass it as a parameter.
 """
 import os
 from datetime import datetime
@@ -18,27 +21,27 @@ class NotesWriteTool(BaseTool):
 
     @property
     def description(self) -> str:
-        return "Writes a note to the project notebook file (output/<project_name>/notes.txt). Each note is timestamped automatically."
+        return (
+            "Writes a note to the project notebook file. Each note is "
+            "timestamped automatically. The project is determined automatically "
+            "from the current session."
+        )
 
     def get_parameters_schema(self):
         return {
             "type": "object",
             "properties": {
-                "project_name": {
-                    "type": "string",
-                    "description": "Name of the active project (directory name)"
-                },
                 "note": {
                     "type": "string",
                     "description": "The note content to write"
                 }
             },
-            "required": ["project_name", "note"]
+            "required": ["note"]
         }
 
-    def execute(self, project_name: str, note: str) -> str:
+    def execute(self, note: str) -> str:
         try:
-            notes_dir = Path("output") / project_name
+            notes_dir = Path("output") / self.project_dir
             notes_dir.mkdir(parents=True, exist_ok=True)
             notes_file = notes_dir / "notes.txt"
 
@@ -62,32 +65,30 @@ class NotesReadTool(BaseTool):
 
     @property
     def description(self) -> str:
-        return "Reads all notes from the project notebook file (output/<project_name>/notes.txt)."
+        return (
+            "Reads all notes from the project notebook file. "
+            "The project is determined automatically from the current session."
+        )
 
     def get_parameters_schema(self):
         return {
             "type": "object",
-            "properties": {
-                "project_name": {
-                    "type": "string",
-                    "description": "Name of the active project (directory name)"
-                }
-            },
-            "required": ["project_name"]
+            "properties": {},
+            "required": []
         }
 
-    def execute(self, project_name: str) -> str:
+    def execute(self) -> str:
         try:
-            notes_file = Path("output") / project_name / "notes.txt"
+            notes_file = Path("output") / self.project_dir / "notes.txt"
 
             if not notes_file.exists():
-                return f"No notes found for project '{project_name}'. File {notes_file} does not exist."
+                return f"No notes found for project '{self.project_dir}'. File {notes_file} does not exist."
 
             with open(notes_file, "r", encoding="utf-8") as f:
                 content = f.read()
 
             if not content.strip():
-                return f"Notes file for project '{project_name}' is empty."
+                return f"Notes file for project '{self.project_dir}' is empty."
 
             return content
         except Exception as e:
