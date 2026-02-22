@@ -114,17 +114,11 @@ class SchedulerService:
         task_id = f"schedule_{schedule['schedule_id']}_{datetime.now().timestamp()}"
 
         # Track task so it appears in execution monitor
-        _track_task(
-            task_id=task_id,
-            task=task,
-            agent_name=schedule['agent_name'],
-            message=schedule['message'],
-            project_dir=schedule['project_dir']
-        )
+        await _track_task(task_id, task)
 
         # Set up cleanup when task completes
         def cleanup_callback(t):
-            _untrack_task(task_id)
+            asyncio.create_task(_untrack_task(task_id))
 
         task.add_done_callback(cleanup_callback)
 

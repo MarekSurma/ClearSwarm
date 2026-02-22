@@ -420,6 +420,8 @@ class Agent:
             # Check if it's a regular tool
             if tool_name in self.tool_loader.get_all_tools():
                 tool = self.tool_loader.get_tool(tool_name)
+                # Inject execution context (project_dir etc.) into tool
+                tool.set_context(project_dir=self.project_dir)
                 # Run tool in thread pool (tools are sync)
                 result = await asyncio.to_thread(tool.execute, **parameters)
 
