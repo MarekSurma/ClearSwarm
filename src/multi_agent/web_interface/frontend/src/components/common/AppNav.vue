@@ -301,6 +301,14 @@ onUnmounted(() => {
           <i class="pi pi-sitemap" />
           Agent Editor
         </router-link>
+        <router-link
+          to="/action-plans"
+          class="nav-link"
+          :class="{ active: route.name === 'action-plans' }"
+        >
+          <i class="pi pi-clock" />
+          Action Plans
+        </router-link>
       </div>
     </div>
 

@@ -9,6 +9,18 @@ from typing import Any, Dict
 class BaseTool(ABC):
     """Base class for all tools."""
 
+    def __init__(self):
+        self._context: Dict[str, Any] = {}
+
+    def set_context(self, **kwargs) -> None:
+        """Set execution context (e.g. project_dir) injected by the agent."""
+        self._context.update(kwargs)
+
+    @property
+    def project_dir(self) -> str:
+        """Get the current project directory from injected context."""
+        return self._context.get("project_dir", "default")
+
     @property
     @abstractmethod
     def name(self) -> str:

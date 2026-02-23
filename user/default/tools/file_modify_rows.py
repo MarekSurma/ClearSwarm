@@ -1,14 +1,21 @@
 """
-File modify rows tool - replaces specific rows in a file in the output directory.
+File modify rows tool - replaces specific rows in a file in the project output directory.
+Files are stored in output/<project_dir>/.
+The project is determined automatically from the current session.
 """
 import os
 from multi_agent.tools.base import BaseTool
+
+_ROOT_OUTPUT = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "output")
 
 
 class FileModifyRowsTool(BaseTool):
     """Tool for modifying specific rows in a file."""
 
-    OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "output")
+    def _get_output_dir(self) -> str:
+        output_dir = os.path.join(_ROOT_OUTPUT, self.project_dir)
+        os.makedirs(output_dir, exist_ok=True)
+        return output_dir
 
     @property
     def name(self) -> str:
@@ -22,11 +29,10 @@ class FileModifyRowsTool(BaseTool):
             "with the provided content. The new content can have a different number of lines than "
             "the range being replaced. "
             "The file_name can include subdirectory paths. "
-            "A leading slash means the output directory is the root. "
             "IMPORTANT: When making multiple modifications to the same file in one batch, "
             "always apply changes from the END of the file toward the BEGINNING (i.e. highest "
-            "row numbers first). Modifying in the opposite order (from the beginning toward the end) "
-            "will shift line numbers after each change and corrupt subsequent modifications."
+            "row numbers first). Modifying in the opposite order will shift line numbers and "
+            "corrupt subsequent modifications."
         )
 
     def get_parameters_schema(self):
@@ -35,7 +41,7 @@ class FileModifyRowsTool(BaseTool):
             "properties": {
                 "file_name": {
                     "type": "string",
-                    "description": "Name of the file to modify (can include subdirectory path, leading slash is relative to output dir)"
+                    "description": "Name of the file to modify (can include subdirectory path)"
                 },
                 "row_from": {
                     "type": "integer",
@@ -54,10 +60,11 @@ class FileModifyRowsTool(BaseTool):
         }
 
     def _resolve_path(self, file_name: str) -> str:
-        """Resolve file_name to an absolute path within the output directory."""
+        """Resolve file_name to an absolute path within the project output directory."""
+        output_dir = self._get_output_dir()
         file_name = file_name.lstrip("/")
-        full_path = os.path.normpath(os.path.join(self.OUTPUT_DIR, file_name))
-        if not full_path.startswith(os.path.normpath(self.OUTPUT_DIR)):
+        full_path = os.path.normpath(os.path.join(output_dir, file_name))
+        if not full_path.startswith(os.path.normpath(output_dir)):
             raise ValueError("Path escapes the output directory")
         return full_path
 

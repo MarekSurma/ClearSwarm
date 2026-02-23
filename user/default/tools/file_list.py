@@ -1,14 +1,21 @@
 """
-File list tool - lists files and directories in the output directory.
+File list tool - lists files and directories in the project output directory.
+Files are stored in output/<project_dir>/.
+The project is determined automatically from the current session.
 """
 import os
 from multi_agent.tools.base import BaseTool
+
+_ROOT_OUTPUT = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "output")
 
 
 class FileListTool(BaseTool):
     """Tool for listing files and directories."""
 
-    OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "output")
+    def _get_output_dir(self) -> str:
+        output_dir = os.path.join(_ROOT_OUTPUT, self.project_dir)
+        os.makedirs(output_dir, exist_ok=True)
+        return output_dir
 
     @property
     def name(self) -> str:
@@ -17,9 +24,9 @@ class FileListTool(BaseTool):
     @property
     def description(self) -> str:
         return (
-            "Lists files and directories inside the output directory. "
-            "Provide a subdirectory path to list its contents, or leave empty / use '/' to list the root output directory. "
-            "A leading slash means the output directory is the root."
+            "Lists files and directories inside the project output directory "
+            "(output/<project>/). Provide a subdirectory path to list its contents, "
+            "or use '/' to list the project root output directory."
         )
 
     def get_parameters_schema(self):
@@ -28,19 +35,20 @@ class FileListTool(BaseTool):
             "properties": {
                 "directory": {
                     "type": "string",
-                    "description": "Subdirectory to list (relative to output dir, leading slash is relative to output dir). Use '/' or empty string for the root output directory."
+                    "description": "Subdirectory to list (relative to project output dir). Use '/' or empty string for the project root."
                 }
             },
             "required": ["directory"]
         }
 
     def _resolve_path(self, directory: str) -> str:
-        """Resolve directory to an absolute path within the output directory."""
+        """Resolve directory to an absolute path within the project output directory."""
+        output_dir = self._get_output_dir()
         directory = directory.lstrip("/")
         if not directory:
-            return os.path.normpath(self.OUTPUT_DIR)
-        full_path = os.path.normpath(os.path.join(self.OUTPUT_DIR, directory))
-        if not full_path.startswith(os.path.normpath(self.OUTPUT_DIR)):
+            return os.path.normpath(output_dir)
+        full_path = os.path.normpath(os.path.join(output_dir, directory))
+        if not full_path.startswith(os.path.normpath(output_dir)):
             raise ValueError("Path escapes the output directory")
         return full_path
 

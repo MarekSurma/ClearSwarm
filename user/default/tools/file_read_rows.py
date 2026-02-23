@@ -1,14 +1,21 @@
 """
-File read rows tool - reads specific rows from a file in the output directory.
+File read rows tool - reads specific rows from a file in the project output directory.
+Files are stored in output/<project_dir>/.
+The project is determined automatically from the current session.
 """
 import os
 from multi_agent.tools.base import BaseTool
+
+_ROOT_OUTPUT = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "output")
 
 
 class FileReadRowsTool(BaseTool):
     """Tool for reading specific rows from a file."""
 
-    OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "output")
+    def _get_output_dir(self) -> str:
+        output_dir = os.path.join(_ROOT_OUTPUT, self.project_dir)
+        os.makedirs(output_dir, exist_ok=True)
+        return output_dir
 
     @property
     def name(self) -> str:
@@ -17,11 +24,10 @@ class FileReadRowsTool(BaseTool):
     @property
     def description(self) -> str:
         return (
-            "Reads specific rows from a file in the output directory. "
-            "Row numbers are 1-based. If the requested range exceeds the file size, "
-            "it returns whatever rows are available within the range. "
-            "The file_name can include subdirectory paths. "
-            "A leading slash means the output directory is the root."
+            "Reads specific rows from a file in the project output directory "
+            "(output/<project>/). Row numbers are 1-based. If the requested range "
+            "exceeds the file size, it returns whatever rows are available. "
+            "The file_name can include subdirectory paths."
         )
 
     def get_parameters_schema(self):
@@ -30,7 +36,7 @@ class FileReadRowsTool(BaseTool):
             "properties": {
                 "file_name": {
                     "type": "string",
-                    "description": "Name of the file to read (can include subdirectory path, leading slash is relative to output dir)"
+                    "description": "Name of the file to read (can include subdirectory path)"
                 },
                 "row_from": {
                     "type": "integer",
@@ -45,10 +51,11 @@ class FileReadRowsTool(BaseTool):
         }
 
     def _resolve_path(self, file_name: str) -> str:
-        """Resolve file_name to an absolute path within the output directory."""
+        """Resolve file_name to an absolute path within the project output directory."""
+        output_dir = self._get_output_dir()
         file_name = file_name.lstrip("/")
-        full_path = os.path.normpath(os.path.join(self.OUTPUT_DIR, file_name))
-        if not full_path.startswith(os.path.normpath(self.OUTPUT_DIR)):
+        full_path = os.path.normpath(os.path.join(output_dir, file_name))
+        if not full_path.startswith(os.path.normpath(output_dir)):
             raise ValueError("Path escapes the output directory")
         return full_path
 

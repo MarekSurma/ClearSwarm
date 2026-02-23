@@ -1,14 +1,21 @@
 """
-Directory create tool - creates directories in the output directory.
+Directory create tool - creates directories in the project output directory.
+Directories are created in output/<project_dir>/.
+The project is determined automatically from the current session.
 """
 import os
 from multi_agent.tools.base import BaseTool
+
+_ROOT_OUTPUT = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "output")
 
 
 class DirectoryCreateTool(BaseTool):
     """Tool for creating directories recursively."""
 
-    OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "output")
+    def _get_output_dir(self) -> str:
+        output_dir = os.path.join(_ROOT_OUTPUT, self.project_dir)
+        os.makedirs(output_dir, exist_ok=True)
+        return output_dir
 
     @property
     def name(self) -> str:
@@ -17,9 +24,10 @@ class DirectoryCreateTool(BaseTool):
     @property
     def description(self) -> str:
         return (
-            "Creates a directory (and any necessary parent directories) inside the output directory. "
+            "Creates a directory (and any necessary parent directories) inside "
+            "the project output directory (output/<project>/). "
             "Works recursively - all intermediate directories are created automatically. "
-            "A leading slash means the output directory is the root."
+            "Supports nested paths like 'a/b/c'."
         )
 
     def get_parameters_schema(self):
@@ -28,17 +36,18 @@ class DirectoryCreateTool(BaseTool):
             "properties": {
                 "directory_name": {
                     "type": "string",
-                    "description": "Directory path to create (relative to output dir, leading slash is relative to output dir). Supports nested paths like 'a/b/c'."
+                    "description": "Directory path to create (relative to project output dir). Supports nested paths like 'a/b/c'."
                 }
             },
             "required": ["directory_name"]
         }
 
     def _resolve_path(self, directory_name: str) -> str:
-        """Resolve directory_name to an absolute path within the output directory."""
+        """Resolve directory_name to an absolute path within the project output directory."""
+        output_dir = self._get_output_dir()
         directory_name = directory_name.lstrip("/")
-        full_path = os.path.normpath(os.path.join(self.OUTPUT_DIR, directory_name))
-        if not full_path.startswith(os.path.normpath(self.OUTPUT_DIR)):
+        full_path = os.path.normpath(os.path.join(output_dir, directory_name))
+        if not full_path.startswith(os.path.normpath(output_dir)):
             raise ValueError("Path escapes the output directory")
         return full_path
 
