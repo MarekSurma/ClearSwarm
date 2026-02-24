@@ -385,3 +385,48 @@ class TaskPickUpFirstByStatusTool(BaseTool):
                 return f"No tasks found with status [{status}]."
         except Exception as e:
             return f"Error picking up task: {e}"
+
+
+class TaskPickUpByNumberTool(BaseTool):
+    @property
+    def name(self) -> str:
+        return "task_pick_up_by_number"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Picks up a specific task by its number, changes its status to "
+            "[in_progress], and returns its full content. "
+            f"{STATUSES_DESC}"
+        )
+
+    def get_parameters_schema(self):
+        return {
+            "type": "object",
+            "properties": {
+                "number": {
+                    "type": "integer",
+                    "description": "Task number (e.g. 1 for 0001.txt)"
+                }
+            },
+            "required": ["number"]
+        }
+
+    def execute(self, number: int) -> str:
+        try:
+            num = _parse_number(number)
+            with _lock_tasks(self.project_dir) as tasks_path:
+                task_path = _task_file(tasks_path, num)
+                if not task_path.exists():
+                    return f"Task {num:04d} not found."
+                with open(task_path, "r", encoding="utf-8") as f:
+                    lines = f.readlines()
+                if len(lines) < 2:
+                    return f"Task {num:04d} has invalid format (missing status line)."
+                lines[1] = "[in_progress]\n"
+                with open(task_path, "w", encoding="utf-8") as f:
+                    f.writelines(lines)
+                content = "".join(lines)
+                return f"Task {num:04d} picked up.\n\n{content}"
+        except Exception as e:
+            return f"Error picking up task: {e}"

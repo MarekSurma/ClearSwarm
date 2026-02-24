@@ -235,6 +235,58 @@ async function handleAgentCreated(agentName: string) {
   await loadAgents()
   selectAgent(agentName)
 }
+
+async function handleCloneAgent(source: string, newName: string) {
+  try {
+    const cloned = await api.cloneAgent(source, newName)
+
+    toast.add({
+      severity: 'success',
+      summary: 'Agent Cloned',
+      detail: `Created "${cloned.name}" from "${source}"`,
+      life: 3000,
+    })
+
+    await loadAgents()
+    selectAgent(cloned.name)
+  } catch (error: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: error.message || 'Failed to clone agent',
+      life: 5000,
+    })
+  }
+}
+
+async function handleDeleteAgent(agentName: string) {
+  try {
+    await api.deleteAgent(agentName)
+
+    toast.add({
+      severity: 'success',
+      summary: 'Agent Deleted',
+      detail: `Agent "${agentName}" has been deleted`,
+      life: 3000,
+    })
+
+    // Clear selection if the deleted agent was selected
+    if (selectedAgentName.value === agentName) {
+      selectedAgentName.value = null
+      selectedNodeId.value = null
+      selectedNodeAgentDetail.value = null
+    }
+
+    await loadAgents()
+  } catch (error: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: error.message || 'Failed to delete agent',
+      life: 5000,
+    })
+  }
+}
 </script>
 
 <template>
@@ -253,6 +305,8 @@ async function handleAgentCreated(agentName: string) {
             :selectedName="selectedAgentName"
             @select="selectAgent"
             @new="handleNewAgent"
+            @delete="handleDeleteAgent"
+            @clone="handleCloneAgent"
           />
         </div>
       </aside>

@@ -47,6 +47,13 @@ export function useApi() {
   const deleteAgent = (name: string) =>
     request<{ message: string }>(withProject(`/api/agents/${name}`), { method: 'DELETE' })
 
+  const cloneAgent = (name: string, newName: string) =>
+    request<AgentDetail>(withProject(`/api/agents/${name}/clone`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ new_name: newName }),
+    })
+
   const runAgent = (data: RunAgentRequest) =>
     request<RunAgentResponse>(withProject('/api/agents/run'), {
       method: 'POST',
@@ -124,6 +131,7 @@ export function useApi() {
     createAgent,
     updateAgent,
     deleteAgent,
+    cloneAgent,
     runAgent,
     stopAllAgents,
     stopAgentTree,

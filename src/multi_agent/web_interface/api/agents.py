@@ -460,6 +460,52 @@ async def update_agent(agent_name: str, request: UpdateAgentRequest, project: st
         raise HTTPException(status_code=500, detail=f"Failed to update agent: {str(e)}")
 
 
+class CloneAgentRequest(BaseModel):
+    """Request model for cloning an agent."""
+    new_name: str
+
+
+@router.post("/agents/{agent_name}/clone", response_model=AgentDetail)
+async def clone_agent(agent_name: str, request: CloneAgentRequest, project: str = Query("default")):
+    """Clone an existing agent with a custom name."""
+    agents_dir = get_agents_dir(project)
+    source_dir = agents_dir / agent_name
+
+    if not source_dir.exists():
+        raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' not found")
+
+    new_name = request.new_name.strip()
+
+    if not new_name:
+        raise HTTPException(status_code=400, detail="New name is required")
+
+    if not new_name.replace('_', '').replace('-', '').isalnum():
+        raise HTTPException(status_code=400, detail="Name can only contain letters, numbers, underscores and hyphens")
+
+    if (agents_dir / new_name).exists():
+        raise HTTPException(status_code=400, detail=f"Agent '{new_name}' already exists")
+
+    try:
+        shutil.copytree(source_dir, agents_dir / new_name)
+        reset_loaders(project)
+
+        # Read back the cloned agent details
+        clone_dir = agents_dir / new_name
+        description = (clone_dir / "description.txt").read_text(encoding='utf-8').strip()
+        system_prompt = (clone_dir / "system_prompt.txt").read_text(encoding='utf-8')
+        tools_file = clone_dir / "tools.txt"
+        tools = [line.strip() for line in tools_file.read_text(encoding='utf-8').splitlines() if line.strip()] if tools_file.exists() else []
+
+        return AgentDetail(
+            name=new_name,
+            description=description,
+            system_prompt=system_prompt,
+            tools=tools
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to clone agent: {str(e)}")
+
+
 @router.delete("/agents/{agent_name}")
 async def delete_agent(agent_name: str, project: str = Query("default")):
     """Delete an agent from a project."""
