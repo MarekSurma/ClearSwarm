@@ -35,7 +35,21 @@ export function useVisualGraph() {
   const agentCache = new Map<string, AgentDetail>()
   const toolCache = new Map<string, ToolInfo>()
 
-  async function initialize(container: HTMLElement, onNodeClick?: (nodeId: string) => void, onBackgroundClick?: () => void) {
+  let currentRootAgent: string | null = null
+
+  function getNodeDomPosition(nodeId: string, container: HTMLElement): { x: number; y: number } | null {
+    if (!network) return null
+    const pos = network.getPosition(nodeId)
+    const domPos = network.canvasToDOM(pos)
+    return domPos
+  }
+
+  function isRootAgent(nodeId: string): boolean {
+    if (!nodeId.startsWith('agent::')) return false
+    return nodeId.replace('agent::', '') === currentRootAgent
+  }
+
+  async function initialize(container: HTMLElement, onNodeClick?: (nodeId: string) => void, onBackgroundClick?: () => void, onNodeHover?: (nodeId: string) => void, onNodeBlur?: () => void) {
     nodes = new DataSet([])
     edges = new DataSet([])
     container.innerHTML = ''
@@ -101,12 +115,16 @@ export function useVisualGraph() {
       }
     })
 
-    network.on('hoverNode', () => {
+    network.on('hoverNode', (params: any) => {
       container.style.cursor = 'pointer'
+      if (onNodeHover && params.node) {
+        onNodeHover(String(params.node))
+      }
     })
 
     network.on('blurNode', () => {
       container.style.cursor = 'default'
+      if (onNodeBlur) onNodeBlur()
     })
   }
 
@@ -125,6 +143,7 @@ export function useVisualGraph() {
   async function buildGraphForAgent(rootAgentName: string, allAgents: string[]) {
     if (!nodes || !edges) return
 
+    currentRootAgent = rootAgentName
     isLoading.value = true
     agentCache.clear()
 
@@ -499,6 +518,45 @@ export function useVisualGraph() {
     return parents
   }
 
+  let highlightedNodeId: string | null = null
+
+  function networkInstance(): Network | null {
+    return network
+  }
+
+  function highlightNode(nodeId: string) {
+    if (!nodes || highlightedNodeId === nodeId) return
+    clearHighlight()
+    highlightedNodeId = nodeId
+    const node = nodes.get(nodeId) as VisNode | null
+    if (node) {
+      nodes.update({
+        ...node,
+        borderWidth: 4,
+        color: {
+          ...node.color,
+          border: GRAPH_COLORS.agent.highlightBorder,
+        },
+      })
+    }
+  }
+
+  function clearHighlight() {
+    if (!nodes || !highlightedNodeId) return
+    const node = nodes.get(highlightedNodeId) as VisNode | null
+    if (node) {
+      nodes.update({
+        ...node,
+        borderWidth: 2,
+        color: {
+          ...node.color,
+          border: GRAPH_COLORS.agent.border,
+        },
+      })
+    }
+    highlightedNodeId = null
+  }
+
   return {
     isLoading,
     initialize,
@@ -509,5 +567,10 @@ export function useVisualGraph() {
     addToolNode,
     addSubAgentNode,
     removeEdgeFromParent,
+    networkInstance,
+    highlightNode,
+    clearHighlight,
+    getNodeDomPosition,
+    isRootAgent,
   }
 }

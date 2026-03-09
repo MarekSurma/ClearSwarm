@@ -11,6 +11,7 @@ import VisualGraphCanvas from '@/components/visual-editor/VisualGraphCanvas.vue'
 import NodeActionPanel from '@/components/visual-editor/NodeActionPanel.vue'
 import AgentEditModal from '@/components/visual-editor/AgentEditModal.vue'
 import AgentCreateModal from '@/components/visual-editor/AgentCreateModal.vue'
+import ToolsSidebar from '@/components/visual-editor/ToolsSidebar.vue'
 
 const { agents, loadAgents } = useAgents()
 const api = useApi()
@@ -166,6 +167,152 @@ async function handleAddAgent(subAgentName: string) {
   }
 }
 
+async function handleDropAgent(droppedAgentName: string, targetAgentName: string) {
+  // Load the target agent detail so we can update its tools list
+  try {
+    const targetDetail = await api.getAgentDetail(targetAgentName)
+
+    // Check if already assigned
+    if (targetDetail.tools.includes(droppedAgentName)) {
+      toast.add({
+        severity: 'warn',
+        summary: 'Already Added',
+        detail: `"${toDisplayName(droppedAgentName)}" is already in "${toDisplayName(targetAgentName)}"`,
+        life: 3000,
+      })
+      return
+    }
+
+    const updatedTools = [...targetDetail.tools, droppedAgentName]
+
+    await api.updateAgent(targetAgentName, {
+      description: targetDetail.description,
+      system_prompt: targetDetail.system_prompt,
+      tools: updatedTools,
+    })
+
+    toast.add({
+      severity: 'success',
+      summary: 'Sub-Agent Added',
+      detail: `Agent "${toDisplayName(droppedAgentName)}" added to "${toDisplayName(targetAgentName)}"`,
+      life: 3000,
+    })
+
+    // Update graph incrementally
+    await loadAgents()
+    const allAgentNames = agents.value.map((a) => a.name)
+    await graphCanvas.value?.addSubAgentNode(targetAgentName, droppedAgentName, allAgentNames)
+
+    // If the target agent was the selected node, refresh its detail
+    if (selectedNodeId.value === `agent::${targetAgentName}` && selectedNodeAgentDetail.value) {
+      selectedNodeAgentDetail.value = { ...selectedNodeAgentDetail.value, tools: updatedTools }
+    }
+  } catch (error: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: error.message || 'Failed to add sub-agent',
+      life: 5000,
+    })
+  }
+}
+
+async function handleDropTool(toolName: string, targetAgentName: string) {
+  try {
+    const targetDetail = await api.getAgentDetail(targetAgentName)
+
+    if (targetDetail.tools.includes(toolName)) {
+      toast.add({
+        severity: 'warn',
+        summary: 'Already Added',
+        detail: `"${toDisplayName(toolName)}" is already in "${toDisplayName(targetAgentName)}"`,
+        life: 3000,
+      })
+      return
+    }
+
+    const updatedTools = [...targetDetail.tools, toolName]
+
+    await api.updateAgent(targetAgentName, {
+      description: targetDetail.description,
+      system_prompt: targetDetail.system_prompt,
+      tools: updatedTools,
+    })
+
+    toast.add({
+      severity: 'success',
+      summary: 'Tool Added',
+      detail: `Tool "${toDisplayName(toolName)}" added to "${toDisplayName(targetAgentName)}"`,
+      life: 3000,
+    })
+
+    graphCanvas.value?.addToolNode(targetAgentName, toolName)
+
+    if (selectedNodeId.value === `agent::${targetAgentName}` && selectedNodeAgentDetail.value) {
+      selectedNodeAgentDetail.value = { ...selectedNodeAgentDetail.value, tools: updatedTools }
+    }
+  } catch (error: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: error.message || 'Failed to add tool',
+      life: 5000,
+    })
+  }
+}
+
+async function handleQuickRemoveNode(nodeId: string) {
+  const parents = graphCanvas.value?.getParentAgents(nodeId) ?? []
+  if (parents.length === 0) return
+
+  // Determine what to remove
+  let itemToRemove = ''
+  if (nodeId.startsWith('agent::')) {
+    itemToRemove = nodeId.replace('agent::', '')
+  } else if (nodeId.startsWith('tool::')) {
+    const match = nodeId.match(/^tool::(.+?)::from::/)
+    if (match) itemToRemove = match[1]
+  }
+  if (!itemToRemove) return
+
+  // Remove from all parents
+  for (const parentAgentName of parents) {
+    try {
+      const parentDetail = await api.getAgentDetail(parentAgentName)
+      const updatedTools = parentDetail.tools.filter((t) => t !== itemToRemove)
+
+      await api.updateAgent(parentAgentName, {
+        description: parentDetail.description,
+        system_prompt: parentDetail.system_prompt,
+        tools: updatedTools,
+      })
+
+      graphCanvas.value?.removeEdgeFromParent(nodeId, parentAgentName)
+    } catch (error: any) {
+      toast.add({
+        severity: 'error',
+        summary: 'Error',
+        detail: error.message || 'Failed to remove',
+        life: 5000,
+      })
+      return
+    }
+  }
+
+  toast.add({
+    severity: 'success',
+    summary: 'Removed',
+    detail: `Removed "${toDisplayName(itemToRemove)}"`,
+    life: 3000,
+  })
+
+  // Clear selection if this was the selected node
+  if (selectedNodeId.value === nodeId) {
+    selectedNodeId.value = null
+    selectedNodeAgentDetail.value = null
+  }
+}
+
 function handleEditTexts() {
   showEditModal.value = true
 }
@@ -312,13 +459,16 @@ async function handleDeleteAgent(agentName: string) {
         </div>
       </aside>
 
-      <!-- Right: Graph canvas -->
-      <main class="right-panel">
+      <!-- Center: Graph canvas -->
+      <main class="center-panel">
         <div class="graph-wrapper">
           <VisualGraphCanvas
             ref="graphCanvas"
             @node-click="handleNodeClick"
             @deselect="handleDeselect"
+            @drop-agent="handleDropAgent"
+            @drop-tool="handleDropTool"
+            @remove-node="handleQuickRemoveNode"
           />
 
           <!-- Node Action Panel -->
@@ -336,6 +486,13 @@ async function handleDeleteAgent(agentName: string) {
           />
         </div>
       </main>
+
+      <!-- Right: Tools list -->
+      <aside class="right-panel">
+        <div class="panel">
+          <ToolsSidebar :tools="tools" />
+        </div>
+      </aside>
     </div>
 
     <!-- Agent Edit Modal -->
@@ -374,7 +531,7 @@ async function handleDeleteAgent(agentName: string) {
 
 .editor-layout {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 280px 1fr 260px;
   gap: 1.5rem;
   height: calc(100vh - 180px);
 }
@@ -392,8 +549,14 @@ async function handleDeleteAgent(agentName: string) {
   overflow-y: auto;
 }
 
+.center-panel {
+  height: 100%;
+  min-width: 0;
+}
+
 .right-panel {
   height: 100%;
+  overflow: hidden;
 }
 
 .graph-wrapper {

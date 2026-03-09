@@ -85,6 +85,8 @@ function submitClone(agentName: string) {
         <div
           class="agent-item"
           :class="{ active: agent.name === selectedName }"
+          draggable="true"
+          @dragstart="(e: DragEvent) => { e.dataTransfer?.setData('application/agent-name', agent.name); e.dataTransfer!.effectAllowed = 'copy' }"
           @click="emit('select', agent.name)"
         >
           <div class="item-content">
@@ -192,8 +194,12 @@ function submitClone(agentName: string) {
   gap: 0.25rem;
   padding: 0.625rem 0.75rem;
   border-radius: 6px;
-  cursor: pointer;
+  cursor: grab;
   transition: background 0.15s ease;
+}
+
+.agent-item:active {
+  cursor: grabbing;
 }
 
 .agent-item:hover {
