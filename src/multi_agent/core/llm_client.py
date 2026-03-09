@@ -127,7 +127,6 @@ class OpenAILLMClient(LLMClient):
                 for chunk in stream:
                     # Check for shutdown request
                     if shutdown_event.is_set():
-                        print("\n[LLM streaming interrupted]", flush=True)
                         stream.close()
                         break
 
@@ -136,9 +135,6 @@ class OpenAILLMClient(LLMClient):
                         if hasattr(delta, 'content') and delta.content:
                             content = delta.content
                             response_content += content
-                            # Only print if content has non-whitespace characters
-                            if content.strip():
-                                print(content, end='', flush=True)
 
                     # Save model info from first chunk
                     if not response_model and hasattr(chunk, 'model'):
@@ -150,10 +146,10 @@ class OpenAILLMClient(LLMClient):
                         on_stream_update(response_content)
                         last_update_time = now
 
-                print()  # New line after streaming
+                pass  # Streaming complete
             except Exception as e:
                 if shutdown_event.is_set():
-                    print("\n[LLM streaming interrupted]", flush=True)
+                    pass  # Streaming interrupted by shutdown
                 else:
                     raise
 

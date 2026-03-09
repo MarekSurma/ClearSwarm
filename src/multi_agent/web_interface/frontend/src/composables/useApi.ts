@@ -82,7 +82,22 @@ export function useApi() {
   const getExecutionTree = (id: string) => request<ExecutionTree>(`/api/executions/${id}/tree`)
   const getExecutionLog = (id: string) => request<ExecutionLog>(`/api/executions/${id}/log`)
   const getExecutionTools = (id: string) => request<ToolExecution[]>(`/api/executions/${id}/tools`)
-  const getExecutionGraph = (id: string) => request<GraphData>(`/api/executions/${id}/graph`)
+  // ETag-aware graph fetching to avoid re-processing unchanged data
+  let _graphEtag: string | null = null
+
+  const getExecutionGraph = async (id: string): Promise<GraphData | null> => {
+    const headers: Record<string, string> = {}
+    if (_graphEtag) headers['If-None-Match'] = _graphEtag
+
+    const response = await fetch(`${API_BASE}/api/executions/${id}/graph`, { headers })
+    if (response.status === 304) return null  // no change
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }))
+      throw new Error(error.detail || `HTTP ${response.status}`)
+    }
+    _graphEtag = response.headers.get('etag')
+    return response.json()
+  }
 
   // Projects
   const getProjects = () => request<ProjectInfo[]>('/api/projects')

@@ -1,10 +1,14 @@
 """
 Execution history API endpoints.
 """
+import hashlib
 import json
+import time
+from collections import defaultdict
 from pathlib import Path
 from typing import List, Dict, Optional
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from ...core.database import get_database
@@ -297,9 +301,28 @@ def _is_error_result(result: str) -> bool:
     )
 
 
-@router.get("/executions/{agent_id}/graph", response_model=GraphData)
-async def get_execution_graph(agent_id: str):
+# In-memory cache for graph responses: agent_id -> (etag, json_bytes, timestamp)
+_graph_cache: Dict[str, tuple] = {}
+_GRAPH_CACHE_TTL = 0.5  # seconds
+
+
+@router.get("/executions/{agent_id}/graph")
+async def get_execution_graph(agent_id: str, request: Request):
     """Get execution graph data for vis-network visualization."""
+
+    # Check cache first
+    cached = _graph_cache.get(agent_id)
+    if cached:
+        etag, json_bytes, ts = cached
+        if time.time() - ts < _GRAPH_CACHE_TTL:
+            if request.headers.get("if-none-match") == etag:
+                return Response(status_code=304)
+            return Response(
+                content=json_bytes,
+                media_type="application/json",
+                headers={"ETag": etag, "Cache-Control": "no-cache"},
+            )
+
     db = get_database()
 
     # Verify root agent exists
@@ -307,85 +330,79 @@ async def get_execution_graph(agent_id: str):
     if not execution:
         raise HTTPException(status_code=404, detail=f"Execution '{agent_id}' not found")
 
+    # Fetch ALL data in exactly 2 queries (instead of N+1)
+    all_execs = db.get_all_executions()
+    all_tools = db.get_all_tool_executions()
+
+    # Build lookup dictionaries in memory
+    exec_by_id: Dict[str, dict] = {e['agent_id']: e for e in all_execs}
+    children_by_parent: Dict[str, list] = defaultdict(list)
+    for e in all_execs:
+        if e.get('parent_agent_id'):
+            children_by_parent[e['parent_agent_id']].append(e)
+    tools_by_agent: Dict[str, list] = defaultdict(list)
+    for t in all_tools:
+        tools_by_agent[t['agent_id']].append(t)
+
     nodes = []
     edges = []
-    node_counter = 0
 
-    # Get all executions for state information
-    all_execs = db.get_all_executions()
-    exec_states = {e['agent_id']: e for e in all_execs}
-
-    def add_agent_and_children(agent_id: str, is_root: bool = False):
-        """Recursively add agent nodes and their children."""
-        nonlocal node_counter
-
-        exec_data = db.get_agent_execution(agent_id)
+    def add_agent_and_children(aid: str, is_root: bool = False):
+        """Recursively add agent nodes and their children (zero DB queries)."""
+        exec_data = exec_by_id.get(aid)
         if not exec_data:
             return
 
-        exec_state = exec_states.get(agent_id, {})
-        current_state = exec_state.get('current_state', 'generating')
+        current_state = exec_data.get('current_state', 'generating')
         is_running = exec_data['completed_at'] is None
 
-        # Determine node properties based on type
         if is_root:
             group = 'root'
-            color = '#f0d8b0'  # Warm luminous cream - large leukocyte under dark field
+            color = '#f0d8b0'
             size = 30
-            shape = 'dot'
         else:
             group = 'agent'
-            color = '#c86840' if is_running else '#5c2818'  # Glowing amber RBC / dimmed dark crimson RBC
+            color = '#c86840' if is_running else '#5c2818'
             size = 20
-            shape = 'dot'
 
-        # Create label with agent name and short ID
-        label = f"{exec_data['agent_name']}\n[{agent_id[:8]}]"
+        label = f"{exec_data['agent_name']}\n[{aid[:8]}]"
 
-        # Count errors from tool executions for this agent
-        agent_tool_execs = db.get_tool_executions(agent_id)
+        # Count errors from pre-fetched tool executions
+        agent_tools = tools_by_agent.get(aid, [])
         agent_error_count = sum(
-            1 for t in agent_tool_execs
+            1 for t in agent_tools
             if _is_error_result(t.get('result', '') or '')
         )
 
-        # Add node
         nodes.append(GraphNode(
-            id=agent_id,
+            id=aid,
             label=label,
             group=group,
             color=color,
-            shape=shape,
+            shape='dot',
             size=size,
             is_running=is_running,
             current_state=current_state,
             error_count=agent_error_count
         ))
 
-        # Add edge from parent (if not root)
-        if not is_root and exec_data['parent_agent_id']:
-            # Get call mode from execution data
-            agent_call_mode = exec_state.get('call_mode', 'synchronous')
-
+        if not is_root and exec_data.get('parent_agent_id'):
+            agent_call_mode = exec_data.get('call_mode', 'synchronous')
             edges.append(GraphEdge(
-                id=f"edge_{exec_data['parent_agent_id']}_{agent_id}",
+                id=f"edge_{exec_data['parent_agent_id']}_{aid}",
                 from_node=exec_data['parent_agent_id'],
-                to_node=agent_id,
-                dashes=(agent_call_mode == 'asynchronous'),  # Dashed for async
+                to_node=aid,
+                dashes=(agent_call_mode == 'asynchronous'),
                 call_mode=agent_call_mode
             ))
 
-        # Add child agents first to get their names
-        all_execs_list = db.get_all_executions()
-        children = [e for e in all_execs_list if e['parent_agent_id'] == agent_id]
+        # Get children from pre-built lookup
+        children = children_by_parent.get(aid, [])
         child_agent_names = {child['agent_name'] for child in children}
 
-        # Add tool executions (but skip tools that are actually agents)
-        tool_execs = db.get_tool_executions(agent_id)
-        for tool in tool_execs:
+        # Add tool nodes (skip tools that are actually sub-agents)
+        for tool in agent_tools:
             tool_name = tool['tool_name']
-
-            # Skip if this tool is actually an agent (will be shown as agent node)
             if tool_name in child_agent_names:
                 continue
 
@@ -393,12 +410,11 @@ async def get_execution_graph(agent_id: str):
             tool_running = tool['is_running']
             tool_has_error = _is_error_result(tool.get('result', '') or '')
 
-            # Tool node
             nodes.append(GraphNode(
                 id=tool_id,
                 label=tool_name,
                 group='tool',
-                color='#b8a048' if tool_running else '#4a3820',  # Warm gold platelet / dimmed dark amber platelet
+                color='#b8a048' if tool_running else '#4a3820',
                 shape='diamond',
                 size=15,
                 is_running=tool_running,
@@ -406,21 +422,35 @@ async def get_execution_graph(agent_id: str):
                 error_count=1 if tool_has_error else 0
             ))
 
-            # Tool edge - dashed if async, solid if sync
             tool_call_mode = tool.get('call_mode', 'synchronous')
             edges.append(GraphEdge(
-                id=f"edge_{agent_id}_{tool_id}",
-                from_node=agent_id,
+                id=f"edge_{aid}_{tool_id}",
+                from_node=aid,
                 to_node=tool_id,
-                dashes=(tool_call_mode == 'asynchronous'),  # Dashed for async, solid for sync
+                dashes=(tool_call_mode == 'asynchronous'),
                 call_mode=tool_call_mode
             ))
 
-        # Add child agents (already retrieved above)
         for child in children:
             add_agent_and_children(child['agent_id'], is_root=False)
 
-    # Build graph starting from root
+    # Build graph starting from root (all data already in memory)
     add_agent_and_children(agent_id, is_root=True)
 
-    return GraphData(nodes=nodes, edges=edges)
+    graph_data = GraphData(nodes=nodes, edges=edges)
+
+    # Serialize, compute ETag, cache
+    json_bytes = graph_data.model_dump_json().encode()
+    etag = hashlib.md5(json_bytes).hexdigest()
+
+    if request.headers.get("if-none-match") == etag:
+        _graph_cache[agent_id] = (etag, json_bytes, time.time())
+        return Response(status_code=304)
+
+    _graph_cache[agent_id] = (etag, json_bytes, time.time())
+
+    return Response(
+        content=json_bytes,
+        media_type="application/json",
+        headers={"ETag": etag, "Cache-Control": "no-cache"},
+    )

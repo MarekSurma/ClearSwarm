@@ -10,6 +10,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from contextlib import asynccontextmanager
 
+from starlette.middleware.gzip import GZipMiddleware
+
 from .api import agents, executions, websocket, projects, schedules
 from ..core.llm_client import request_shutdown, reset_shutdown
 from ..core.database import get_database
@@ -81,6 +83,9 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
+# GZip compression for responses over 1KB
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Include API routers
 app.include_router(agents.router, prefix="/api", tags=["agents"])

@@ -81,6 +81,20 @@ class AgentDatabase:
                 )
             """)
 
+            # Performance indices
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_agent_executions_parent
+                ON agent_executions(parent_agent_id)
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_agent_executions_project
+                ON agent_executions(project_dir)
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_tool_executions_agent
+                ON tool_executions(agent_id)
+            """)
+
             # Add current_state column if it doesn't exist (migration)
             cursor.execute("PRAGMA table_info(agent_executions)")
             columns = [col[1] for col in cursor.fetchall()]
@@ -393,6 +407,34 @@ class AgentDatabase:
                     'completed_at': row[5] if len(row) > 5 else row[4],
                     'result': row[6] if len(row) > 6 else row[5],
                     'is_running': (row[5] if len(row) > 5 else row[4]) is None
+                }
+                for row in rows
+            ]
+
+    def get_all_tool_executions(self) -> List[Dict]:
+        """Get all tool executions in a single query (for graph building)."""
+        import json
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT tool_execution_id, agent_id, tool_name, parameters,
+                       call_mode, started_at, completed_at, result
+                FROM tool_executions
+                ORDER BY started_at ASC
+            """)
+            rows = cursor.fetchall()
+
+            return [
+                {
+                    'tool_execution_id': row[0],
+                    'agent_id': row[1],
+                    'tool_name': row[2],
+                    'parameters': json.loads(row[3]) if row[3] else {},
+                    'call_mode': row[4] if row[4] else 'synchronous',
+                    'started_at': row[5],
+                    'completed_at': row[6],
+                    'result': row[7],
+                    'is_running': row[6] is None
                 }
                 for row in rows
             ]

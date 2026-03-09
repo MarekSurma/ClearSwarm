@@ -141,13 +141,13 @@ class Agent:
 
     def _log(self, message: str, level: str = "INFO"):
         """
-        Log a message to stdout.
+        Log a message (currently disabled for performance).
 
         Args:
             message: Message to log
             level: Log level (INFO, WARNING, ERROR, etc.)
         """
-        print(message, flush=True)
+        pass
 
     def _initialize_system_prompt(self):
         """Initialize the system prompt for this agent."""

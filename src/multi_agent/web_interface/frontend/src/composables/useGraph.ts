@@ -14,10 +14,13 @@ export function useGraph() {
   let network: Network | null = null
   let nodes: DataSet<any> | null = null
   let edges: DataSet<any> | null = null
-  let updateInterval: ReturnType<typeof setInterval> | null = null
+  let animationHandle: number | null = null
+  let fetchInterval: ReturnType<typeof setInterval> | null = null
   let animationPhase = 0
-  let animationFrameCount = 0
   const runningNodeIds = new Set<string>()
+
+  const POLL_ACTIVE_MS = 2000   // 2s when agents are running
+  const POLL_IDLE_MS = 10000    // 10s when everything completed
 
   const currentAgentId = ref<string | null>(null)
   const stats = ref<GraphStats>({
@@ -151,6 +154,9 @@ export function useGraph() {
 
     try {
       const graphData = await api.getExecutionGraph(currentAgentId.value)
+
+      // Server returned 304 Not Modified — nothing changed
+      if (!graphData) return
 
       // Update nodes
       const existingNodeIds = nodes.getIds() as string[]
@@ -297,8 +303,13 @@ export function useGraph() {
         }
       })
 
-      // Update stats
+      // Update stats and adjust polling if running state changed
+      const wasRunning = stats.value.running > 0
       updateStats(graphData)
+      const isNowRunning = stats.value.running > 0
+      if (wasRunning !== isNowRunning) {
+        adjustPollingInterval()
+      }
     } catch (error) {
       console.error('Failed to load graph data:', error)
     }
@@ -317,38 +328,52 @@ export function useGraph() {
 
   function updateRunningShadows() {
     if (!nodes || runningNodeIds.size === 0) return
+    animationPhase += 0.15
     const pulsatingSize = getPulsatingShadowSize()
+    // Batch update all running nodes at once (instead of per-node update)
+    const updates: any[] = []
     runningNodeIds.forEach((nodeId) => {
       const node = nodes!.get(nodeId)
       if (node?.shadow?.size > 15) {
-        nodes!.update({
+        updates.push({
           id: nodeId,
           shadow: { ...node.shadow, size: pulsatingSize },
         })
       }
     })
+    if (updates.length > 0) nodes!.update(updates)
   }
 
-  function updateAnimation() {
-    animationPhase += 0.15
-    animationFrameCount++
-    if (animationFrameCount >= 10) {
-      animationFrameCount = 0
-      loadGraphData()
-    } else {
-      updateRunningShadows()
-    }
+  function animationLoop() {
+    updateRunningShadows()
+    animationHandle = requestAnimationFrame(animationLoop)
   }
 
   function startAutoRefresh() {
     stopAutoRefresh()
-    updateInterval = setInterval(updateAnimation, 100)
+    // Animation via requestAnimationFrame (smooth, no polling)
+    animationHandle = requestAnimationFrame(animationLoop)
+    // Data fetching on adaptive interval
+    const interval = stats.value.running > 0 ? POLL_ACTIVE_MS : POLL_IDLE_MS
+    fetchInterval = setInterval(loadGraphData, interval)
+  }
+
+  function adjustPollingInterval() {
+    // Re-start fetch interval if running state changed
+    if (!fetchInterval) return
+    clearInterval(fetchInterval)
+    const interval = stats.value.running > 0 ? POLL_ACTIVE_MS : POLL_IDLE_MS
+    fetchInterval = setInterval(loadGraphData, interval)
   }
 
   function stopAutoRefresh() {
-    if (updateInterval) {
-      clearInterval(updateInterval)
-      updateInterval = null
+    if (animationHandle) {
+      cancelAnimationFrame(animationHandle)
+      animationHandle = null
+    }
+    if (fetchInterval) {
+      clearInterval(fetchInterval)
+      fetchInterval = null
     }
   }
 
@@ -362,7 +387,6 @@ export function useGraph() {
     edges = null
     currentAgentId.value = null
     animationPhase = 0
-    animationFrameCount = 0
     runningNodeIds.clear()
   }
 
