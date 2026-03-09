@@ -7,6 +7,7 @@ import Button from 'primevue/button'
 import { useApi } from '@/composables/useApi'
 import { useToast } from 'primevue/usetoast'
 import type { AgentDetail } from '@/types/agent'
+import { toDisplayName } from '@/utils/nameFormatting'
 
 const props = defineProps<{
   visible: boolean
@@ -50,7 +51,7 @@ async function save() {
     toast.add({
       severity: 'success',
       summary: 'Saved',
-      detail: `Agent "${props.agentDetail.name}" updated`,
+      detail: `Agent "${toDisplayName(props.agentDetail.name)}" updated`,
       life: 3000,
     })
 
@@ -77,14 +78,14 @@ function cancel() {
   <Dialog
     :visible="visible"
     @update:visible="emit('update:visible', $event)"
-    :header="`Edit Agent: ${agentDetail?.name || ''}`"
+    :header="`Edit Agent: ${agentDetail ? toDisplayName(agentDetail.name) : ''}`"
     modal
     :style="{ width: '600px' }"
   >
     <div class="modal-content">
       <div class="field">
         <label for="agent-name">Name</label>
-        <InputText id="agent-name" :model-value="agentDetail?.name || ''" disabled class="w-full" />
+        <InputText id="agent-name" :model-value="agentDetail ? toDisplayName(agentDetail.name) : ''" disabled class="w-full" />
       </div>
 
       <div class="field">

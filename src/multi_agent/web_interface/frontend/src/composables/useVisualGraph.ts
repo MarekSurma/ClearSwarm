@@ -3,6 +3,7 @@ import { Network, DataSet } from 'vis-network/standalone'
 import { useApi } from './useApi'
 import type { AgentDetail, ToolInfo } from '@/types/agent'
 import { GRAPH_COLORS } from '@/config/graphColors'
+import { toDisplayName } from '@/utils/nameFormatting'
 
 interface VisNode {
   id: string
@@ -165,7 +166,7 @@ export function useVisualGraph() {
         if (!nodes.get(agentNodeId)) {
           nodes.add({
             id: agentNodeId,
-            label: agentName,
+            label: toDisplayName(agentName),
             shape: 'box',
             color: {
               background: GRAPH_COLORS.agent.background,
@@ -218,7 +219,7 @@ export function useVisualGraph() {
             if (!nodes.get(toolNodeId)) {
               nodes.add({
                 id: toolNodeId,
-                label: toolOrAgent,
+                label: toDisplayName(toolOrAgent),
                 shape: 'ellipse',
                 color: {
                   background: GRAPH_COLORS.tool.background,
@@ -288,7 +289,7 @@ export function useVisualGraph() {
     if (!nodes.get(toolNodeId)) {
       nodes.add({
         id: toolNodeId,
-        label: toolName,
+        label: toDisplayName(toolName),
         shape: 'ellipse',
         color: {
           background: GRAPH_COLORS.tool.background,
@@ -359,7 +360,7 @@ export function useVisualGraph() {
       if (!nodes.get(agentNodeId)) {
         nodes.add({
           id: agentNodeId,
-          label: agentName,
+          label: toDisplayName(agentName),
           shape: 'box',
           color: {
             background: GRAPH_COLORS.agent.background,

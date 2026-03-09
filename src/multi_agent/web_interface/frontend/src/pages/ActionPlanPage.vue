@@ -40,7 +40,7 @@
             class="truncate-text"
             style="max-width: 150px"
           >
-            {{ data.agent_name }}
+            {{ toDisplayName(data.agent_name) }}
           </span>
         </template>
       </Column>
@@ -234,6 +234,7 @@ import { useSchedules } from '@/composables/useSchedules'
 import { useAgents } from '@/composables/useAgents'
 import { useApi } from '@/composables/useApi'
 import type { ScheduleInfo, CreateScheduleRequest, ScheduleType } from '@/types/schedule'
+import { toDisplayName } from '@/utils/nameFormatting'
 
 const { schedules, loadSchedules } = useSchedules()
 const { agents, loadAgents } = useAgents()
@@ -264,7 +265,7 @@ const scheduleTypeOptions = [
 
 const agentOptions = computed(() => {
   return agents.value.map(agent => ({
-    label: agent.name,
+    label: toDisplayName(agent.name),
     value: agent.name,
   }))
 })

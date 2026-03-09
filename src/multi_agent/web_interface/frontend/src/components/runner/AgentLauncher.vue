@@ -6,6 +6,7 @@ import Button from 'primevue/button'
 import { useToast } from 'primevue/usetoast'
 import type { AgentInfo } from '@/types/agent'
 import { useApi } from '@/composables/useApi'
+import { toDisplayName } from '@/utils/nameFormatting'
 
 const props = defineProps<{
   agents: AgentInfo[]
@@ -23,7 +24,7 @@ const message = ref('')
 const launching = ref(false)
 
 const agentOptions = computed(() =>
-  props.agents.map((a) => ({ label: a.name, value: a.name }))
+  props.agents.map((a) => ({ label: toDisplayName(a.name), value: a.name }))
 )
 
 const selectedAgentDescription = computed(() => {

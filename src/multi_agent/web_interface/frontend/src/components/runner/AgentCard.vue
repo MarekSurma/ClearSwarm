@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { AgentInfo } from '@/types/agent'
+import { toDisplayName } from '@/utils/nameFormatting'
 
 defineProps<{
   agent: AgentInfo
@@ -8,7 +9,7 @@ defineProps<{
 
 <template>
   <div class="agent-card">
-    <div class="agent-name">{{ agent.name }}</div>
+    <div class="agent-name">{{ toDisplayName(agent.name) }}</div>
     <div class="agent-desc">{{ agent.description }}</div>
   </div>
 </template>

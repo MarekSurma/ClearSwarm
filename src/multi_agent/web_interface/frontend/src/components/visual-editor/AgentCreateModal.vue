@@ -6,6 +6,7 @@ import Textarea from 'primevue/textarea'
 import Button from 'primevue/button'
 import { useApi } from '@/composables/useApi'
 import { useToast } from 'primevue/usetoast'
+import { toDiskName } from '@/utils/nameFormatting'
 
 const props = defineProps<{
   visible: boolean
@@ -60,9 +61,11 @@ async function save() {
 
   isSaving.value = true
 
+  const diskName = toDiskName(name.value.trim())
+
   try {
     await api.createAgent({
-      name: name.value.trim(),
+      name: diskName,
       description: description.value.trim(),
       system_prompt: systemPrompt.value,
       tools: [], // New agents start with no tools
@@ -71,11 +74,11 @@ async function save() {
     toast.add({
       severity: 'success',
       summary: 'Agent Created',
-      detail: `Agent "${name.value}" created successfully`,
+      detail: `Agent "${name.value.trim()}" created successfully`,
       life: 3000,
     })
 
-    emit('saved', name.value.trim())
+    emit('saved', diskName)
     emit('update:visible', false)
   } catch (error: any) {
     toast.add({
@@ -108,11 +111,11 @@ function cancel() {
         <InputText
           id="new-agent-name"
           v-model="name"
-          placeholder="e.g. my_assistant"
+          placeholder="e.g. my assistant"
           class="w-full"
           autofocus
         />
-        <small class="hint">Only letters, numbers, underscores and hyphens allowed</small>
+        <small class="hint">Only letters, numbers, spaces, underscores and hyphens allowed</small>
       </div>
 
       <div class="field">

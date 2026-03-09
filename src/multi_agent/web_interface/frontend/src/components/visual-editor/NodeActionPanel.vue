@@ -4,6 +4,7 @@ import Card from 'primevue/card'
 import Button from 'primevue/button'
 import Select from 'primevue/select'
 import type { AgentInfo, ToolInfo, AgentDetail } from '@/types/agent'
+import { toDisplayName } from '@/utils/nameFormatting'
 
 const props = defineProps<{
   nodeId: string | null
@@ -95,7 +96,7 @@ function handleRemoveFromParent(parentName: string) {
       <template #title>
         <div class="panel-header">
           <i :class="nodeType === 'agent' ? 'pi pi-sitemap' : 'pi pi-wrench'" />
-          <span>{{ nodeName }}</span>
+          <span>{{ toDisplayName(nodeName) }}</span>
         </div>
       </template>
 
@@ -110,7 +111,7 @@ function handleRemoveFromParent(parentName: string) {
                 <Select
                   v-model="selectedTool"
                   :options="availableTools"
-                  option-label="name"
+                  :option-label="(t: ToolInfo) => toDisplayName(t.name)"
                   placeholder="Select tool"
                   class="flex-1"
                   :disabled="availableTools.length === 0"
@@ -132,7 +133,7 @@ function handleRemoveFromParent(parentName: string) {
                 <Select
                   v-model="selectedAgent"
                   :options="availableAgents"
-                  option-label="name"
+                  :option-label="(a: AgentInfo) => toDisplayName(a.name)"
                   placeholder="Select agent"
                   class="flex-1"
                   :disabled="availableAgents.length === 0"
@@ -164,7 +165,7 @@ function handleRemoveFromParent(parentName: string) {
                 <Button
                   v-for="parent in parentAgents"
                   :key="parent"
-                  :label="`Remove from ${parent}`"
+                  :label="`Remove from ${toDisplayName(parent)}`"
                   icon="pi pi-trash"
                   severity="danger"
                   size="small"
@@ -183,7 +184,7 @@ function handleRemoveFromParent(parentName: string) {
               <Button
                 v-for="parent in parentAgents"
                 :key="parent"
-                :label="`Remove from ${parent}`"
+                :label="`Remove from ${toDisplayName(parent)}`"
                 icon="pi pi-trash"
                 severity="danger"
                 size="small"

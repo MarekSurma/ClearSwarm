@@ -3,6 +3,7 @@ import { ref, computed, nextTick } from 'vue'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import type { AgentInfo } from '@/types/agent'
+import { toDisplayName, toDiskName } from '@/utils/nameFormatting'
 
 const props = defineProps<{
   agents: AgentInfo[]
@@ -44,15 +45,16 @@ const agentNames = computed(() => new Set(props.agents.map((a) => a.name)))
 
 const cloneNameError = computed(() => {
   if (!cloneName.value.trim()) return 'Name is required'
-  if (agentNames.value.has(cloneName.value.trim())) return 'Name already exists'
-  if (!/^[a-zA-Z0-9_-]+$/.test(cloneName.value.trim())) return 'Only letters, numbers, _ and -'
+  const diskName = toDiskName(cloneName.value.trim())
+  if (agentNames.value.has(diskName)) return 'Name already exists'
+  if (!/^[a-zA-Z0-9 _-]+$/.test(cloneName.value.trim())) return 'Only letters, numbers, spaces, _ and -'
   return null
 })
 
 function startClone(agentName: string, event: Event) {
   event.stopPropagation()
   cloningAgent.value = agentName
-  cloneName.value = agentName + '_copy'
+  cloneName.value = toDisplayName(agentName) + ' copy'
   nextTick(() => {
     const el = cloneInput.value?.$el as HTMLInputElement | undefined
     if (el) el.focus()
@@ -66,7 +68,7 @@ function cancelClone() {
 
 function submitClone(agentName: string) {
   if (cloneNameError.value) return
-  emit('clone', agentName, cloneName.value.trim())
+  emit('clone', agentName, toDiskName(cloneName.value.trim()))
   cloningAgent.value = null
   cloneName.value = ''
 }
@@ -86,7 +88,7 @@ function submitClone(agentName: string) {
           @click="emit('select', agent.name)"
         >
           <div class="item-content">
-            <div class="item-name">{{ agent.name }}</div>
+            <div class="item-name">{{ toDisplayName(agent.name) }}</div>
             <div class="item-desc">{{ agent.description }}</div>
           </div>
           <div class="item-actions">

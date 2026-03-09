@@ -5,6 +5,7 @@ import { useAgents } from '@/composables/useAgents'
 import { useApi } from '@/composables/useApi'
 import { useProject } from '@/composables/useProject'
 import { useToast } from 'primevue/usetoast'
+import { toDisplayName } from '@/utils/nameFormatting'
 import AgentEditorSidebar from '@/components/editor/AgentEditorSidebar.vue'
 import VisualGraphCanvas from '@/components/visual-editor/VisualGraphCanvas.vue'
 import NodeActionPanel from '@/components/visual-editor/NodeActionPanel.vue'
@@ -243,7 +244,7 @@ async function handleCloneAgent(source: string, newName: string) {
     toast.add({
       severity: 'success',
       summary: 'Agent Cloned',
-      detail: `Created "${cloned.name}" from "${source}"`,
+      detail: `Created "${toDisplayName(cloned.name)}" from "${toDisplayName(source)}"`,
       life: 3000,
     })
 

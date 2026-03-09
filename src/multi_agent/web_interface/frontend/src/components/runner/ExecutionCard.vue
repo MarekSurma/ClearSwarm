@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import Tag from 'primevue/tag'
 import Button from 'primevue/button'
 import type { AgentExecution } from '@/types/execution'
+import { toDisplayName } from '@/utils/nameFormatting'
 
 const props = defineProps<{
   execution: AgentExecution
@@ -34,9 +35,9 @@ const statusLabel = computed(() => (props.execution.is_running ? 'Running' : 'Co
   <div class="execution-card" :class="{ running: execution.is_running }">
     <div class="card-header">
       <div class="card-title">
-        <span class="agent-name">{{ execution.agent_name }}</span>
+        <span class="agent-name">{{ toDisplayName(execution.agent_name) }}</span>
         <span v-if="execution.parent_agent_id" class="parent-label">
-          &larr; {{ execution.parent_agent_name }}
+          &larr; {{ toDisplayName(execution.parent_agent_name) }}
         </span>
       </div>
       <Tag :value="statusLabel" :severity="statusSeverity" />

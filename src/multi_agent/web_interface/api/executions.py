@@ -365,7 +365,7 @@ async def get_execution_graph(agent_id: str, request: Request):
             color = '#c86840' if is_running else '#5c2818'
             size = 20
 
-        label = f"{exec_data['agent_name']}\n[{aid[:8]}]"
+        label = f"{exec_data['agent_name'].replace('_', ' ')}\n[{aid[:8]}]"
 
         # Count errors from pre-fetched tool executions
         agent_tools = tools_by_agent.get(aid, [])
@@ -412,7 +412,7 @@ async def get_execution_graph(agent_id: str, request: Request):
 
             nodes.append(GraphNode(
                 id=tool_id,
-                label=tool_name,
+                label=tool_name.replace('_', ' '),
                 group='tool',
                 color='#b8a048' if tool_running else '#4a3820',
                 shape='diamond',

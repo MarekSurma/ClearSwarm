@@ -400,13 +400,16 @@ async def get_agent_detail(agent_name: str, project: str = Query("default")):
 @router.post("/agents", response_model=AgentDetail)
 async def create_agent(request: CreateAgentRequest, project: str = Query("default")):
     """Create a new agent in a project."""
+    # Convert spaces to underscores for disk storage
+    request.name = request.name.replace(' ', '_')
+
     agents_dir = get_agents_dir(project)
     agent_dir = agents_dir / request.name
 
     if agent_dir.exists():
         raise HTTPException(status_code=400, detail=f"Agent '{request.name}' already exists")
 
-    # Validate agent name (alphanumeric and underscores only)
+    # Validate agent name (alphanumeric, underscores and hyphens only)
     if not request.name.replace('_', '').replace('-', '').isalnum():
         raise HTTPException(status_code=400, detail="Agent name can only contain letters, numbers, underscores and hyphens")
 
@@ -474,7 +477,7 @@ async def clone_agent(agent_name: str, request: CloneAgentRequest, project: str 
     if not source_dir.exists():
         raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' not found")
 
-    new_name = request.new_name.strip()
+    new_name = request.new_name.strip().replace(' ', '_')
 
     if not new_name:
         raise HTTPException(status_code=400, detail="New name is required")

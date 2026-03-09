@@ -3,6 +3,7 @@ import { ref, watch, nextTick } from 'vue'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import type { ExecutionLog, ToolExecution, LogMessage } from '@/types/execution'
+import { toDisplayName } from '@/utils/nameFormatting'
 
 const props = defineProps<{
   nodeType: 'agent' | 'tool' | null
@@ -90,7 +91,7 @@ function getRoleStyle(role: string) {
       <template v-else-if="nodeType === 'agent' && agentLog">
         <div class="detail-section">
           <div class="detail-header">
-            <span class="detail-name">{{ agentLog.agent_name }}</span>
+            <span class="detail-name">{{ toDisplayName(agentLog.agent_name) }}</span>
             <Tag
               :value="isRunning ? 'Running' : 'Completed'"
               :severity="isRunning ? 'warn' : 'success'"
@@ -130,7 +131,7 @@ function getRoleStyle(role: string) {
       <template v-else-if="nodeType === 'tool' && toolDetail">
         <div class="detail-section">
           <div class="detail-header">
-            <span class="detail-name">Tool: {{ toolDetail.tool_name }}</span>
+            <span class="detail-name">Tool: {{ toDisplayName(toolDetail.tool_name) }}</span>
             <Tag
               :value="toolDetail.is_running ? 'Running' : 'Completed'"
               :severity="toolDetail.is_running ? 'warn' : 'success'"
