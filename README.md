@@ -19,18 +19,27 @@ A short demo of a swarm solving mathematical calculations.
 
 ## Requirements
 
-- Python 3.8+
-- Node.js 18+ (for building the frontend; Node 22 recommended)
+- **Python 3.8+**
+- **Node.js 22** via [nvm](https://github.com/nvm-sh/nvm) — required by `start_all.sh`; Vite 6 does **not** work with Node < 18, and older system-wide Node installations (e.g. Node 12) will cause build failures
+- **nvm** (Node Version Manager) installed at `$HOME/.nvm`
 - Access to an OpenAI-compatible API
 
 ## Installation
 
-1. Install Python dependencies:
+1. Install **nvm** if not already present:
+```bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+# Restart your shell or source the profile, then:
+nvm install 22
+nvm use 22
+```
+
+2. Install Python dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-2. Configure `.env` file with your API credentials:
+3. Configure `.env` file with your API credentials:
 ```bash
 cp .env.example .env
 # Edit .env with your settings (it has been preconfigured for openrouter - you just have to paste in your API key)
@@ -42,8 +51,9 @@ OPENAI_API_KEY=your-openrouter-api-key-here
 OPENAI_MODEL=qwen/qwen3-vl-8b-instruct
 ```
 
-3. Build the frontend:
+4. Build the frontend (make sure Node 22 is active first):
 ```bash
+nvm use 22
 make frontend-install   # Install Node dependencies (one-time)
 make frontend-build     # Production build
 ```
@@ -56,8 +66,15 @@ The build output goes to `src/multi_agent/web_interface/dist/` and is served aut
 
 The web interface is built with Vue 3, TypeScript, and PrimeVue, providing a modern single-page application for agent management.
 
+**Quickstart (recommended)** — starts the frontend dev server and the backend in one command:
 ```bash
-# Start web interface (from project root)
+./start_all.sh
+```
+
+> `start_all.sh` requires **nvm** with Node 22 installed (`nvm install 22`). It loads nvm from `$HOME/.nvm` and switches to Node 22 automatically before starting the frontend.
+
+Alternatively, start only the backend (serves the pre-built `dist/`):
+```bash
 ./start_web.sh
 ```
 
@@ -66,7 +83,7 @@ Then open in browser: [http://localhost:8000](http://localhost:8000)
 For frontend development with hot-reload (two terminals):
 ```bash
 ./start_web.sh          # Terminal 1: FastAPI backend on :8000
-make frontend-dev       # Terminal 2: Vite dev server on :5173 with proxy
+nvm use 22 && make frontend-dev  # Terminal 2: Vite dev server on :5173 with proxy
 ```
 
 > ⚠️ **SECURITY WARNING**
@@ -321,7 +338,9 @@ mypy src/
 
 The frontend is a Vue 3 + TypeScript SPA located in `src/multi_agent/web_interface/frontend/`.
 
+**Node 22 is required** (Vite 6 will not build on Node < 18):
 ```bash
+nvm use 22              # Switch to Node 22 before any frontend commands
 make frontend-install   # Install Node dependencies
 make frontend-build     # Production build (output to dist/)
 make frontend-dev       # Start Vite dev server with hot-reload
