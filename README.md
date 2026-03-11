@@ -39,6 +39,14 @@ nvm use 22
 pip install -r requirements.txt
 ```
 
+> **Note for externally managed environments** (e.g. Ubuntu 23.04+, Debian 12+): If `pip` refuses to install system-wide, use a virtual environment instead:
+> ```bash
+> python3 -m venv .venv
+> source .venv/bin/activate
+> pip install -r requirements.txt
+> ```
+> Activate the venv (`source .venv/bin/activate`) each time before running the project.
+
 3. Configure `.env` file with your API credentials:
 ```bash
 cp .env.example .env
