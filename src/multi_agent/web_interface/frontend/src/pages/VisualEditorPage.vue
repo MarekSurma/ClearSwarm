@@ -313,6 +313,38 @@ async function handleQuickRemoveNode(nodeId: string) {
   }
 }
 
+async function handleRemoveSelfLoop(agentName: string) {
+  try {
+    const agentDetail = await api.getAgentDetail(agentName)
+    const updatedTools = agentDetail.tools.filter((t) => t !== agentName)
+
+    await api.updateAgent(agentName, {
+      description: agentDetail.description,
+      system_prompt: agentDetail.system_prompt,
+      tools: updatedTools,
+    })
+
+    toast.add({
+      severity: 'success',
+      summary: 'Self-Reference Removed',
+      detail: `Agent "${toDisplayName(agentName)}" can no longer call itself`,
+      life: 3000,
+    })
+
+    // Update selected node detail if it was this agent
+    if (selectedNodeId.value === `agent::${agentName}` && selectedNodeAgentDetail.value) {
+      selectedNodeAgentDetail.value = { ...selectedNodeAgentDetail.value, tools: updatedTools }
+    }
+  } catch (error: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: error.message || 'Failed to remove self-reference',
+      life: 5000,
+    })
+  }
+}
+
 function handleEditTexts() {
   showEditModal.value = true
 }
@@ -469,6 +501,7 @@ async function handleDeleteAgent(agentName: string) {
             @drop-agent="handleDropAgent"
             @drop-tool="handleDropTool"
             @remove-node="handleQuickRemoveNode"
+          @remove-self-loop="handleRemoveSelfLoop"
           />
 
           <!-- Node Action Panel -->

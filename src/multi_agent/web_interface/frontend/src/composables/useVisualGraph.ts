@@ -56,6 +56,32 @@ export function useVisualGraph() {
     }
   }
 
+  function getNodeTopDomPosition(nodeId: string): { x: number; y: number } | null {
+    if (!network) return null
+    try {
+      const bbox = network.getBoundingBox(nodeId)
+      const canvasPos = { x: (bbox.left + bbox.right) / 2, y: bbox.top - 20 }
+      return network.canvasToDOM(canvasPos)
+    } catch {
+      return null
+    }
+  }
+
+  function hasSelfLoop(nodeId: string): boolean {
+    if (!edges) return false
+    const allEdges = edges.get() as VisEdge[]
+    return allEdges.some((e) => e.from === nodeId && e.to === nodeId)
+  }
+
+  function removeSelfLoopEdge(nodeId: string) {
+    if (!edges) return
+    const allEdges = edges.get() as VisEdge[]
+    const selfLoop = allEdges.find((e) => e.from === nodeId && e.to === nodeId)
+    if (selfLoop) {
+      edges.remove(selfLoop.id)
+    }
+  }
+
   function getScale(): number {
     if (!network) return 1
     return network.getScale()
@@ -92,15 +118,15 @@ export function useVisualGraph() {
           hover: GRAPH_COLORS.editor.edges.hover,
         },
         arrows: { to: { enabled: true, scaleFactor: 0.5 } },
-        smooth: { type: 'continuous', roundness: 0.5 },
+        smooth: false,
       },
       layout: {
         hierarchical: {
           enabled: true,
           direction: 'UD',
           sortMethod: 'directed',
-          nodeSpacing: 150,
-          levelSeparation: 120,
+          nodeSpacing: 220,
+          levelSeparation: 160,
           shakeTowards: 'roots',
         },
       },
@@ -108,9 +134,9 @@ export function useVisualGraph() {
         enabled: true,
         hierarchicalRepulsion: {
           centralGravity: 0.0,
-          springLength: 180,
+          springLength: 200,
           springConstant: 0.01,
-          nodeDistance: 120,
+          nodeDistance: 160,
           damping: 0.09,
         },
         solver: 'hierarchicalRepulsion',
@@ -611,7 +637,10 @@ export function useVisualGraph() {
     clearHighlight,
     getNodeDomPosition,
     getNodeRightEdgeDomPosition,
+    getNodeTopDomPosition,
     getScale,
     isRootAgent,
+    hasSelfLoop,
+    removeSelfLoopEdge,
   }
 }

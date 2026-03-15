@@ -10,6 +10,7 @@ const emit = defineEmits<{
   dropAgent: [agentName: string, targetAgentName: string]
   dropTool: [toolName: string, targetAgentName: string]
   removeNode: [nodeId: string]
+  removeSelfLoop: [agentName: string]
 }>()
 
 defineExpose({
@@ -28,6 +29,9 @@ const hoveredNodeId = ref<string | null>(null)
 const removeBtnPos = ref({ x: 0, y: 0 })
 const removeBtnScale = ref(1)
 const showRemoveBtn = ref(false)
+const selfLoopBtnPos = ref({ x: 0, y: 0 })
+const selfLoopBtnScale = ref(1)
+const showSelfLoopBtn = ref(false)
 
 const bgColor = GRAPH_COLORS.background
 
@@ -40,6 +44,9 @@ onMounted(() => {
 function handleViewChange() {
   if (showRemoveBtn.value && hoveredNodeId.value) {
     updateRemoveBtnPosition(hoveredNodeId.value)
+  }
+  if (showSelfLoopBtn.value && hoveredNodeId.value) {
+    updateSelfLoopBtnPosition(hoveredNodeId.value)
   }
 }
 
@@ -59,12 +66,22 @@ let blurTimeout: ReturnType<typeof setTimeout> | null = null
 
 function handleNodeHover(nodeId: string) {
   if (blurTimeout) { clearTimeout(blurTimeout); blurTimeout = null }
+
+  hoveredNodeId.value = nodeId
+
+  // Self-loop button: show for any agent node that has a self-loop
+  if (nodeId.startsWith('agent::') && graph.hasSelfLoop(nodeId)) {
+    updateSelfLoopBtnPosition(nodeId)
+    showSelfLoopBtn.value = true
+  } else {
+    showSelfLoopBtn.value = false
+  }
+
+  // Regular remove button: hide for root agents
   if (graph.isRootAgent(nodeId)) {
     showRemoveBtn.value = false
-    hoveredNodeId.value = null
     return
   }
-  hoveredNodeId.value = nodeId
   updateRemoveBtnPosition(nodeId)
   showRemoveBtn.value = true
 }
@@ -72,6 +89,7 @@ function handleNodeHover(nodeId: string) {
 function handleNodeBlur() {
   blurTimeout = setTimeout(() => {
     showRemoveBtn.value = false
+    showSelfLoopBtn.value = false
     hoveredNodeId.value = null
   }, 200)
 }
@@ -82,6 +100,7 @@ function keepRemoveBtn() {
 
 function leaveRemoveBtn() {
   showRemoveBtn.value = false
+  showSelfLoopBtn.value = false
   hoveredNodeId.value = null
 }
 
@@ -89,8 +108,29 @@ function handleRemoveClick() {
   if (!hoveredNodeId.value) return
   const nodeId = hoveredNodeId.value
   showRemoveBtn.value = false
+  showSelfLoopBtn.value = false
   hoveredNodeId.value = null
   emit('removeNode', nodeId)
+}
+
+function handleSelfLoopRemoveClick() {
+  if (!hoveredNodeId.value) return
+  const nodeId = hoveredNodeId.value
+  const agentName = nodeId.replace('agent::', '')
+  showSelfLoopBtn.value = false
+  showRemoveBtn.value = false
+  hoveredNodeId.value = null
+  graph.removeSelfLoopEdge(nodeId)
+  emit('removeSelfLoop', agentName)
+}
+
+function updateSelfLoopBtnPosition(nodeId: string) {
+  if (!graphContainer.value) return
+  const topPos = graph.getNodeTopDomPosition(nodeId)
+  if (!topPos) return
+  const scale = Math.min(Math.max(graph.getScale(), 0.3), 2)
+  selfLoopBtnPos.value = { x: topPos.x - 12, y: topPos.y - 12 }
+  selfLoopBtnScale.value = scale
 }
 
 function updateRemoveBtnPosition(nodeId: string) {
@@ -142,7 +182,7 @@ function handleDrop(event: DragEvent) {
   const targetAgentName = nodeId.replace('agent::', '')
 
   const agentName = event.dataTransfer?.getData('application/agent-name')
-  if (agentName && targetAgentName !== agentName) {
+  if (agentName) {
     emit('dropAgent', agentName, targetAgentName)
     return
   }
@@ -189,6 +229,18 @@ function fitView() {
         @mouseenter="keepRemoveBtn"
         @mouseleave="leaveRemoveBtn"
         @click.stop="handleRemoveClick"
+      >
+        <i class="pi pi-minus" />
+      </div>
+
+      <!-- Self-loop remove button -->
+      <div
+        v-if="showSelfLoopBtn"
+        class="self-loop-remove-btn"
+        :style="{ left: selfLoopBtnPos.x + 'px', top: selfLoopBtnPos.y + 'px', transform: `scale(${selfLoopBtnScale})`, transformOrigin: 'center center' }"
+        @mouseenter="keepRemoveBtn"
+        @mouseleave="leaveRemoveBtn"
+        @click.stop="handleSelfLoopRemoveClick"
       >
         <i class="pi pi-minus" />
       </div>
@@ -253,6 +305,29 @@ function fitView() {
 }
 
 .node-remove-btn:hover {
+  background: #e03030;
+  filter: brightness(1.2);
+}
+
+.self-loop-remove-btn {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #c03030;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.7rem;
+  z-index: 5;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  transition: transform 0.1s ease, background 0.15s ease;
+  pointer-events: auto;
+}
+
+.self-loop-remove-btn:hover {
   background: #e03030;
   filter: brightness(1.2);
 }
