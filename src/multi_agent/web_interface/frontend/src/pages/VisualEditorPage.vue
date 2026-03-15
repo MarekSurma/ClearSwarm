@@ -546,7 +546,9 @@ async function handleDeleteAgent(agentName: string) {
   border-radius: 10px;
   padding: 1.25rem;
   height: 100%;
-  overflow-y: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .center-panel {

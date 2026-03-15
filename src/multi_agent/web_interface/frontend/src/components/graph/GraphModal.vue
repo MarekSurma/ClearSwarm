@@ -9,6 +9,9 @@ import { useApi } from '@/composables/useApi'
 import GraphControls from './GraphControls.vue'
 import GraphStats from './GraphStats.vue'
 import NodeDetailsPanel from './NodeDetailsPanel.vue'
+import { GRAPH_COLORS } from '@/config/graphColors'
+
+const bgColor = GRAPH_COLORS.background
 
 const props = defineProps<{
   visible: boolean
@@ -99,7 +102,7 @@ function close() {
     <GraphStats :stats="graph.stats.value" />
 
     <div class="graph-main-panel">
-      <div ref="graphContainer" class="graph-container" />
+      <div ref="graphContainer" class="graph-container" :style="{ background: bgColor }" />
       <NodeDetailsPanel
         :nodeType="nodeDetails.nodeType.value"
         :agentLog="nodeDetails.agentLog.value"
@@ -136,6 +139,6 @@ function close() {
 .graph-container {
   flex: 7;
   min-height: 400px;
-  background: #0a0a0a;
+  background: rgb(61, 148, 181);
 }
 </style>

@@ -41,6 +41,7 @@ html {
 
 body {
   min-height: 100vh;
+  background-color: var(--p-surface-50);
 }
 
 .app-layout {

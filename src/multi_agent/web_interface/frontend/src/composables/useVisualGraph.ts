@@ -44,12 +44,29 @@ export function useVisualGraph() {
     return domPos
   }
 
+  function getNodeRightEdgeDomPosition(nodeId: string): { x: number; y: number } | null {
+    if (!network) return null
+    try {
+      const bbox = network.getBoundingBox(nodeId)
+      // Top-right corner of the node in canvas space
+      const canvasPos = { x: bbox.right, y: bbox.top }
+      return network.canvasToDOM(canvasPos)
+    } catch {
+      return null
+    }
+  }
+
+  function getScale(): number {
+    if (!network) return 1
+    return network.getScale()
+  }
+
   function isRootAgent(nodeId: string): boolean {
     if (!nodeId.startsWith('agent::')) return false
     return nodeId.replace('agent::', '') === currentRootAgent
   }
 
-  async function initialize(container: HTMLElement, onNodeClick?: (nodeId: string) => void, onBackgroundClick?: () => void, onNodeHover?: (nodeId: string) => void, onNodeBlur?: () => void) {
+  async function initialize(container: HTMLElement, onNodeClick?: (nodeId: string) => void, onBackgroundClick?: () => void, onNodeHover?: (nodeId: string) => void, onNodeBlur?: () => void, onViewChange?: () => void) {
     nodes = new DataSet([])
     edges = new DataSet([])
     container.innerHTML = ''
@@ -57,6 +74,7 @@ export function useVisualGraph() {
     const options = {
       nodes: {
         font: { size: 14, color: GRAPH_COLORS.font.primary, face: GRAPH_COLORS.font.face },
+        margin: { top: 6, right: 6, bottom: 6, left: 6 },
         borderWidth: 2,
         shadow: {
           enabled: true,
@@ -69,9 +87,9 @@ export function useVisualGraph() {
       edges: {
         width: 2,
         color: {
-          color: GRAPH_COLORS.edges.default,
-          highlight: GRAPH_COLORS.edges.highlight,
-          hover: GRAPH_COLORS.edges.hover,
+          color: GRAPH_COLORS.editor.edges.default,
+          highlight: GRAPH_COLORS.editor.edges.highlight,
+          hover: GRAPH_COLORS.editor.edges.hover,
         },
         arrows: { to: { enabled: true, scaleFactor: 0.5 } },
         smooth: { type: 'continuous', roundness: 0.5 },
@@ -126,6 +144,11 @@ export function useVisualGraph() {
       container.style.cursor = 'default'
       if (onNodeBlur) onNodeBlur()
     })
+
+    if (onViewChange) {
+      network.on('zoom', onViewChange)
+      network.on('dragEnd', onViewChange)
+    }
   }
 
   async function loadToolsCache() {
@@ -194,6 +217,10 @@ export function useVisualGraph() {
                 background: GRAPH_COLORS.agent.highlightBackground,
                 border: GRAPH_COLORS.agent.highlightBorder,
               },
+              hover: {
+                background: GRAPH_COLORS.agent.highlightBackground,
+                border: GRAPH_COLORS.agent.highlightBorder,
+              },
             },
             size: isRoot ? 30 : 20,
             borderWidth: isRoot ? 3 : 2,
@@ -204,7 +231,7 @@ export function useVisualGraph() {
               x: 0,
               y: 0,
             },
-            font: { size: isRoot ? 16 : 14, color: GRAPH_COLORS.font.primary },
+            font: { size: isRoot ? 16 : 14, color: GRAPH_COLORS.agent.font },
           })
         }
 
@@ -247,6 +274,10 @@ export function useVisualGraph() {
                     background: GRAPH_COLORS.tool.highlightBackground,
                     border: GRAPH_COLORS.tool.highlightBorder,
                   },
+                  hover: {
+                    background: GRAPH_COLORS.tool.highlightBackground,
+                    border: GRAPH_COLORS.tool.highlightBorder,
+                  },
                 },
                 size: 15,
                 borderWidth: 2,
@@ -257,7 +288,7 @@ export function useVisualGraph() {
                   x: 0,
                   y: 0,
                 },
-                font: { size: 12, color: GRAPH_COLORS.font.primary },
+                font: { size: 12, color: GRAPH_COLORS.tool.font },
               })
             }
 
@@ -317,6 +348,10 @@ export function useVisualGraph() {
             background: GRAPH_COLORS.tool.highlightBackground,
             border: GRAPH_COLORS.tool.highlightBorder,
           },
+          hover: {
+            background: GRAPH_COLORS.tool.highlightBackground,
+            border: GRAPH_COLORS.tool.highlightBorder,
+          },
         },
         size: 15,
         borderWidth: 2,
@@ -327,7 +362,7 @@ export function useVisualGraph() {
           x: 0,
           y: 0,
         },
-        font: { size: 12, color: GRAPH_COLORS.font.primary },
+        font: { size: 12, color: GRAPH_COLORS.tool.font },
       })
     }
 
@@ -388,6 +423,10 @@ export function useVisualGraph() {
               background: GRAPH_COLORS.agent.highlightBackground,
               border: GRAPH_COLORS.agent.highlightBorder,
             },
+            hover: {
+              background: GRAPH_COLORS.agent.highlightBackground,
+              border: GRAPH_COLORS.agent.highlightBorder,
+            },
           },
           size: 20,
           borderWidth: 2,
@@ -398,7 +437,7 @@ export function useVisualGraph() {
             x: 0,
             y: 0,
           },
-          font: { size: 14, color: GRAPH_COLORS.font.primary },
+          font: { size: 14, color: GRAPH_COLORS.agent.font },
         })
       }
 
@@ -571,6 +610,8 @@ export function useVisualGraph() {
     highlightNode,
     clearHighlight,
     getNodeDomPosition,
+    getNodeRightEdgeDomPosition,
+    getScale,
     isRootAgent,
   }
 }

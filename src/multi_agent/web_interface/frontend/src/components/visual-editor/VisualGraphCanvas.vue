@@ -26,15 +26,22 @@ const graphContainer = ref<HTMLDivElement | null>(null)
 const removeBtn = ref<HTMLDivElement | null>(null)
 const hoveredNodeId = ref<string | null>(null)
 const removeBtnPos = ref({ x: 0, y: 0 })
+const removeBtnScale = ref(1)
 const showRemoveBtn = ref(false)
 
 const bgColor = GRAPH_COLORS.background
 
 onMounted(() => {
   if (graphContainer.value) {
-    graph.initialize(graphContainer.value, handleNodeClick, handleBackgroundClick, handleNodeHover, handleNodeBlur)
+    graph.initialize(graphContainer.value, handleNodeClick, handleBackgroundClick, handleNodeHover, handleNodeBlur, handleViewChange)
   }
 })
+
+function handleViewChange() {
+  if (showRemoveBtn.value && hoveredNodeId.value) {
+    updateRemoveBtnPosition(hoveredNodeId.value)
+  }
+}
 
 onUnmounted(() => {
   graph.cleanup()
@@ -88,9 +95,11 @@ function handleRemoveClick() {
 
 function updateRemoveBtnPosition(nodeId: string) {
   if (!graphContainer.value) return
-  const pos = graph.getNodeDomPosition(nodeId, graphContainer.value)
-  if (!pos) return
-  removeBtnPos.value = { x: pos.x + 30, y: pos.y - 12 }
+  const edgePos = graph.getNodeRightEdgeDomPosition(nodeId)
+  if (!edgePos) return
+  const scale = Math.min(Math.max(graph.getScale(), 0.3), 2)
+  removeBtnPos.value = { x: edgePos.x - 4, y: edgePos.y - 8 }
+  removeBtnScale.value = scale
 }
 
 function getNodeAtDomPosition(event: DragEvent): string | null {
@@ -176,7 +185,7 @@ function fitView() {
         v-if="showRemoveBtn"
         ref="removeBtn"
         class="node-remove-btn"
-        :style="{ left: removeBtnPos.x + 'px', top: removeBtnPos.y + 'px' }"
+        :style="{ left: removeBtnPos.x + 'px', top: removeBtnPos.y + 'px', transform: `scale(${removeBtnScale})`, transformOrigin: 'center center' }"
         @mouseenter="keepRemoveBtn"
         @mouseleave="leaveRemoveBtn"
         @click.stop="handleRemoveClick"
@@ -245,7 +254,7 @@ function fitView() {
 
 .node-remove-btn:hover {
   background: #e03030;
-  transform: scale(1.15);
+  filter: brightness(1.2);
 }
 
 .loading-overlay {

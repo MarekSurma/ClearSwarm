@@ -4,6 +4,7 @@ import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import type { AgentInfo } from '@/types/agent'
 import { toDisplayName, toDiskName } from '@/utils/nameFormatting'
+import { GRAPH_COLORS } from '@/config/graphColors'
 
 const props = defineProps<{
   agents: AgentInfo[]
@@ -88,11 +89,9 @@ function submitClone(agentName: string) {
           draggable="true"
           @dragstart="(e: DragEvent) => { e.dataTransfer?.setData('application/agent-name', agent.name); e.dataTransfer!.effectAllowed = 'copy' }"
           @click="emit('select', agent.name)"
+          v-tooltip.right="agent.description || undefined"
         >
-          <div class="item-content">
-            <div class="item-name">{{ toDisplayName(agent.name) }}</div>
-            <div class="item-desc">{{ agent.description }}</div>
-          </div>
+          <div class="item-name">{{ toDisplayName(agent.name) }}</div>
           <div class="item-actions">
             <Button
               class="action-btn"
@@ -166,6 +165,8 @@ function submitClone(agentName: string) {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  min-height: 0;
+  flex: 1;
 }
 
 .sidebar-header {
@@ -184,7 +185,8 @@ function submitClone(agentName: string) {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  max-height: 70vh;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -192,10 +194,13 @@ function submitClone(agentName: string) {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  padding: 0.625rem 0.75rem;
-  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
   cursor: grab;
-  transition: background 0.15s ease;
+  background: v-bind('GRAPH_COLORS.agent.background');
+  border: 2px solid v-bind('GRAPH_COLORS.agent.border');
+  color: v-bind('GRAPH_COLORS.agent.font');
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .agent-item:active {
@@ -203,29 +208,24 @@ function submitClone(agentName: string) {
 }
 
 .agent-item:hover {
-  background: var(--p-surface-100);
+  background: v-bind('GRAPH_COLORS.agent.highlightBackground');
+  border-color: v-bind('GRAPH_COLORS.agent.highlightBorder');
 }
 
 .agent-item.active {
-  background: var(--p-primary-50);
-  border-left: 3px solid var(--p-primary-color);
-}
-
-.item-content {
-  flex: 1;
-  min-width: 0;
+  background: v-bind('GRAPH_COLORS.agent.highlightBackground');
+  border-color: v-bind('GRAPH_COLORS.agent.highlightBorder');
+  box-shadow: 0 0 0 2px v-bind('GRAPH_COLORS.agent.shadow');
 }
 
 .item-name {
+  flex: 1;
+  min-width: 0;
   font-weight: 600;
-  font-size: 0.9rem;
-  margin-bottom: 0.125rem;
-}
-
-.item-desc {
-  font-size: 0.75rem;
-  color: var(--p-text-muted-color);
-  line-height: 1.3;
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .item-actions {
@@ -234,6 +234,10 @@ function submitClone(agentName: string) {
   gap: 0;
   opacity: 0;
   transition: opacity 0.15s ease;
+}
+
+.item-actions :deep(.p-button) {
+  color: v-bind('GRAPH_COLORS.agent.font');
 }
 
 .agent-item:hover .item-actions {

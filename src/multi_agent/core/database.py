@@ -87,10 +87,6 @@ class AgentDatabase:
                 ON agent_executions(parent_agent_id)
             """)
             cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_agent_executions_project
-                ON agent_executions(project_dir)
-            """)
-            cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_tool_executions_agent
                 ON tool_executions(agent_id)
             """)
@@ -124,6 +120,12 @@ class AgentDatabase:
             agent_columns = [col[1] for col in cursor.fetchall()]
             if 'project_dir' not in agent_columns:
                 cursor.execute("ALTER TABLE agent_executions ADD COLUMN project_dir TEXT DEFAULT 'default'")
+
+            # Index on project_dir (must be after migration that adds the column)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_agent_executions_project
+                ON agent_executions(project_dir)
+            """)
 
             # Seed default project if not exists
             cursor.execute("SELECT COUNT(*) FROM projects WHERE project_name = 'default'")

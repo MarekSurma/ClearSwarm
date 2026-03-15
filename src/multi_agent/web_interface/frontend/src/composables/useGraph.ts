@@ -38,6 +38,7 @@ export function useGraph() {
     const baseOptions = {
       nodes: {
         font: { size: 14, color: GRAPH_COLORS.font.primary, face: GRAPH_COLORS.font.face },
+        margin: { top: 6, right: 6, bottom: 6, left: 6 },
         borderWidth: 2,
         shadow: {
           enabled: true,
@@ -50,9 +51,9 @@ export function useGraph() {
       edges: {
         width: 2,
         color: {
-          color: GRAPH_COLORS.edges.default,
-          highlight: GRAPH_COLORS.edges.highlight,
-          hover: GRAPH_COLORS.edges.hover,
+          color: GRAPH_COLORS.visualizer.edges.default,
+          highlight: GRAPH_COLORS.visualizer.edges.highlight,
+          hover: GRAPH_COLORS.visualizer.edges.hover,
         },
         arrows: { to: { enabled: true, scaleFactor: 0.5 } },
       },
@@ -169,7 +170,7 @@ export function useGraph() {
       graphData.nodes.forEach((node) => {
         if (node.is_running) runningNodeIds.add(node.id)
 
-        let borderColor = GRAPH_COLORS.borders.default
+        let borderColor = GRAPH_COLORS.visualizer.borders.default
         let borderWidth = 2
         let shadowConfig = {
           enabled: true,
@@ -236,6 +237,14 @@ export function useGraph() {
           shadowConfig.color = GRAPH_COLORS.error.shadowRunning
         }
 
+        // Resolve node colors from config based on group & running state
+        const groupConfig = node.group === 'root'
+          ? GRAPH_COLORS.visualizer.root
+          : node.group === 'tool'
+            ? GRAPH_COLORS.visualizer.tool
+            : GRAPH_COLORS.visualizer.agent
+        const bgColor = node.is_running ? groupConfig.backgroundRunning : groupConfig.background
+
         let enhancedLabel = node.label
         if (node.is_running && node.current_state && node.group !== 'tool') {
           const indicators: Record<string, string> = {
@@ -254,10 +263,12 @@ export function useGraph() {
           id: node.id,
           label: enhancedLabel,
           group: node.group,
+          font: { color: groupConfig.font },
           color: {
-            background: node.color,
+            background: bgColor,
             border: borderColor,
-            highlight: { background: node.color, border: GRAPH_COLORS.borders.highlight },
+            highlight: { background: bgColor, border: GRAPH_COLORS.visualizer.borders.highlight },
+            hover: { background: bgColor, border: GRAPH_COLORS.visualizer.borders.highlight },
           },
           borderWidth,
           shadow: shadowConfig,
@@ -290,8 +301,8 @@ export function useGraph() {
           dashes: isAsync,
           width: isAsync ? 2 : 3,
           color: {
-            color: isAsync ? GRAPH_COLORS.edges.async : GRAPH_COLORS.edges.default,
-            highlight: isAsync ? GRAPH_COLORS.edges.asyncHighlight : GRAPH_COLORS.edges.highlight,
+            color: isAsync ? GRAPH_COLORS.visualizer.edges.async : GRAPH_COLORS.visualizer.edges.default,
+            highlight: isAsync ? GRAPH_COLORS.visualizer.edges.asyncHighlight : GRAPH_COLORS.visualizer.edges.highlight,
           },
           title: `${isAsync ? 'Asynchronous' : 'Synchronous'} call`,
         }
