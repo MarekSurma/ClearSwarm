@@ -45,4 +45,5 @@ export interface StopAllResponse {
 export interface ToolInfo {
   name: string
   description: string
+  group: string
 }

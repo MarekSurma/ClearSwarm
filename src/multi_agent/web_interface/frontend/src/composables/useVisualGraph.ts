@@ -262,7 +262,7 @@ export function useVisualGraph() {
         }
 
         // Process tools and sub-agents
-        agentDetail.tools.forEach((toolOrAgent) => {
+        agentDetail.tools.filter((t) => t !== 'end_session').forEach((toolOrAgent) => {
           const isAgent = allAgents.includes(toolOrAgent)
 
           if (isAgent) {
@@ -292,7 +292,7 @@ export function useVisualGraph() {
               nodes.add({
                 id: toolNodeId,
                 label: toDisplayName(toolOrAgent),
-                shape: 'ellipse',
+                shape: 'box',
                 color: {
                   background: GRAPH_COLORS.tool.background,
                   border: GRAPH_COLORS.tool.border,
@@ -366,7 +366,7 @@ export function useVisualGraph() {
       nodes.add({
         id: toolNodeId,
         label: toDisplayName(toolName),
-        shape: 'ellipse',
+        shape: 'box',
         color: {
           background: GRAPH_COLORS.tool.background,
           border: GRAPH_COLORS.tool.border,
@@ -467,7 +467,7 @@ export function useVisualGraph() {
         })
       }
 
-      agentDetail.tools.forEach((toolOrAgent) => {
+      agentDetail.tools.filter((t) => t !== 'end_session').forEach((toolOrAgent) => {
         if (allAgents.includes(toolOrAgent)) {
           const childEdgeId = `${agentNodeId}->agent::${toolOrAgent}`
           if (!edges!.get(childEdgeId)) {

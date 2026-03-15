@@ -364,7 +364,8 @@ async def list_tools(project: str = Query("default")):
     for tool_name, tool in tool_loader.get_all_tools().items():
         tools.append({
             "name": tool_name,
-            "description": tool.description
+            "description": tool.description,
+            "group": tool_loader.get_tool_source(tool_name)
         })
 
     return tools
@@ -388,6 +389,8 @@ async def get_agent_detail(agent_name: str, project: str = Query("default")):
     tools = []
     if tools_file.exists():
         tools = [line.strip() for line in tools_file.read_text(encoding='utf-8').splitlines() if line.strip()]
+    if 'end_session' not in tools:
+        tools.append('end_session')
 
     return AgentDetail(
         name=agent_name,
@@ -416,9 +419,11 @@ async def create_agent(request: CreateAgentRequest, project: str = Query("defaul
     try:
         agent_dir.mkdir(parents=True, exist_ok=True)
 
+        tools = request.tools if 'end_session' in request.tools else request.tools + ['end_session']
+
         (agent_dir / "description.txt").write_text(request.description, encoding='utf-8')
         (agent_dir / "system_prompt.txt").write_text(request.system_prompt, encoding='utf-8')
-        (agent_dir / "tools.txt").write_text('\n'.join(request.tools), encoding='utf-8')
+        (agent_dir / "tools.txt").write_text('\n'.join(tools), encoding='utf-8')
 
         # Reset loaders to pick up new agent
         reset_loaders(project)
@@ -427,7 +432,7 @@ async def create_agent(request: CreateAgentRequest, project: str = Query("defaul
             name=request.name,
             description=request.description,
             system_prompt=request.system_prompt,
-            tools=request.tools
+            tools=tools
         )
     except Exception as e:
         # Clean up on failure
@@ -446,9 +451,11 @@ async def update_agent(agent_name: str, request: UpdateAgentRequest, project: st
         raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' not found")
 
     try:
+        tools = request.tools if 'end_session' in request.tools else request.tools + ['end_session']
+
         (agent_dir / "description.txt").write_text(request.description, encoding='utf-8')
         (agent_dir / "system_prompt.txt").write_text(request.system_prompt, encoding='utf-8')
-        (agent_dir / "tools.txt").write_text('\n'.join(request.tools), encoding='utf-8')
+        (agent_dir / "tools.txt").write_text('\n'.join(tools), encoding='utf-8')
 
         # Reset loaders to pick up changes
         reset_loaders(project)
@@ -457,7 +464,7 @@ async def update_agent(agent_name: str, request: UpdateAgentRequest, project: st
             name=agent_name,
             description=request.description,
             system_prompt=request.system_prompt,
-            tools=request.tools
+            tools=tools
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update agent: {str(e)}")

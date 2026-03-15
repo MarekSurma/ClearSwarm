@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
-import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import type { AgentInfo } from '@/types/agent'
 import { toDisplayName, toDiskName } from '@/utils/nameFormatting'
@@ -18,6 +17,7 @@ const emit = defineEmits<{
   clone: [source: string, newName: string]
 }>()
 
+const collapsed = ref(false)
 const confirmingDelete = ref<string | null>(null)
 let confirmTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -55,7 +55,7 @@ const cloneNameError = computed(() => {
 function startClone(agentName: string, event: Event) {
   event.stopPropagation()
   cloningAgent.value = agentName
-  cloneName.value = toDisplayName(agentName) + ' copy'
+  cloneName.value = ''
   nextTick(() => {
     const el = cloneInput.value?.$el as HTMLInputElement | undefined
     if (el) el.focus()
@@ -77,11 +77,14 @@ function submitClone(agentName: string) {
 
 <template>
   <div class="editor-sidebar">
-    <div class="sidebar-header">
-      <h3>Agents</h3>
-      <Button icon="pi pi-plus" size="small" rounded @click="emit('new')" />
+    <div class="sidebar-header" @click="collapsed = !collapsed">
+      <h3 v-tooltip.bottom="'Click to select, drag onto graph nodes to assign as sub-agent. Use icons to clone or delete.'">Agents</h3>
+      <div class="header-actions" @click.stop>
+        <i class="pi pi-plus icon-btn" @click="emit('new')" v-tooltip.top="'New agent'" />
+        <i class="pi collapse-icon" :class="collapsed ? 'pi-chevron-down' : 'pi-chevron-up'" @click="collapsed = !collapsed" />
+      </div>
     </div>
-    <div class="agent-list">
+    <div v-show="!collapsed" class="agent-list">
       <template v-for="agent in agents" :key="agent.name">
         <div
           class="agent-item"
@@ -89,39 +92,21 @@ function submitClone(agentName: string) {
           draggable="true"
           @dragstart="(e: DragEvent) => { e.dataTransfer?.setData('application/agent-name', agent.name); e.dataTransfer!.effectAllowed = 'copy' }"
           @click="emit('select', agent.name)"
-          v-tooltip.right="agent.description || undefined"
+          v-tooltip.right="{ value: `<b>${toDisplayName(agent.name)}</b>${agent.description ? '<br><br>' + agent.description : ''}`, escape: false }"
         >
           <div class="item-name">{{ toDisplayName(agent.name) }}</div>
           <div class="item-actions">
-            <Button
-              class="action-btn"
-              icon="pi pi-clone"
-              size="small"
-              severity="secondary"
-              text
-              rounded
-              @click.stop="startClone(agent.name, $event)"
-              v-tooltip.top="'Clone agent'"
-            />
-            <Button
+            <i class="pi pi-clone icon-btn" @click.stop="startClone(agent.name, $event)" v-tooltip.top="'Clone agent'" />
+            <i
               v-if="confirmingDelete === agent.name"
-              class="action-btn confirm-delete"
-              icon="pi pi-check"
-              size="small"
-              severity="danger"
-              rounded
-              @click="confirmDelete(agent.name, $event)"
+              class="pi pi-check icon-btn icon-btn--danger"
+              @click.stop="confirmDelete(agent.name, $event)"
               v-tooltip.top="'Confirm delete'"
             />
-            <Button
+            <i
               v-else
-              class="action-btn"
-              icon="pi pi-trash"
-              size="small"
-              severity="secondary"
-              text
-              rounded
-              @click="startConfirm(agent.name, $event)"
+              class="pi pi-trash icon-btn"
+              @click.stop="startConfirm(agent.name, $event)"
               v-tooltip.top="'Delete agent'"
             />
           </div>
@@ -137,22 +122,8 @@ function submitClone(agentName: string) {
             @keydown.enter="submitClone(agent.name)"
             @keydown.escape="cancelClone"
           />
-          <Button
-            icon="pi pi-check"
-            size="small"
-            severity="success"
-            rounded
-            :disabled="!!cloneNameError"
-            @click="submitClone(agent.name)"
-          />
-          <Button
-            icon="pi pi-times"
-            size="small"
-            severity="secondary"
-            text
-            rounded
-            @click="cancelClone"
-          />
+          <i class="pi pi-check icon-btn icon-btn--success" :class="{ 'icon-btn--disabled': !!cloneNameError }" @click="!cloneNameError && submitClone(agent.name)" />
+          <i class="pi pi-times icon-btn" @click="cancelClone" />
         </div>
       </template>
       <p v-if="agents.length === 0" class="empty-text">No agents found</p>
@@ -173,12 +144,26 @@ function submitClone(agentName: string) {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  cursor: pointer;
+  user-select: none;
 }
 
 .sidebar-header h3 {
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.collapse-icon {
+  font-size: 0.75rem;
+  color: #000;
+  cursor: pointer;
 }
 
 .agent-list {
@@ -198,9 +183,9 @@ function submitClone(agentName: string) {
   border-radius: 8px;
   cursor: grab;
   background: v-bind('GRAPH_COLORS.agent.background');
-  border: 2px solid v-bind('GRAPH_COLORS.agent.border');
+  border: none;
   color: v-bind('GRAPH_COLORS.agent.font');
-  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: background 0.15s ease;
 }
 
 .agent-item:active {
@@ -209,13 +194,10 @@ function submitClone(agentName: string) {
 
 .agent-item:hover {
   background: v-bind('GRAPH_COLORS.agent.highlightBackground');
-  border-color: v-bind('GRAPH_COLORS.agent.highlightBorder');
 }
 
 .agent-item.active {
   background: v-bind('GRAPH_COLORS.agent.highlightBackground');
-  border-color: v-bind('GRAPH_COLORS.agent.highlightBorder');
-  box-shadow: 0 0 0 2px v-bind('GRAPH_COLORS.agent.shadow');
 }
 
 .item-name {
@@ -231,25 +213,43 @@ function submitClone(agentName: string) {
 .item-actions {
   display: flex;
   flex-shrink: 0;
-  gap: 0;
+  gap: 0.35rem;
   opacity: 0;
   transition: opacity 0.15s ease;
-}
-
-.item-actions :deep(.p-button) {
-  color: v-bind('GRAPH_COLORS.agent.font');
 }
 
 .agent-item:hover .item-actions {
   opacity: 1;
 }
 
-.confirm-delete {
+.item-actions:has(.icon-btn--danger) {
   opacity: 1;
 }
 
-.item-actions:has(.confirm-delete) {
+.icon-btn {
+  font-size: 0.8rem;
+  cursor: pointer;
+  color: v-bind('GRAPH_COLORS.agent.font');
+  opacity: 0.7;
+  transition: opacity 0.15s ease;
+}
+
+.icon-btn:hover {
   opacity: 1;
+}
+
+.icon-btn--danger {
+  color: #c03030;
+  opacity: 1;
+}
+
+.icon-btn--success {
+  color: #2e7d32;
+}
+
+.icon-btn--disabled {
+  opacity: 0.3;
+  cursor: default;
 }
 
 .clone-row {

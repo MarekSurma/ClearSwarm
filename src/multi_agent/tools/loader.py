@@ -22,6 +22,7 @@ class ToolLoader:
         """
         self.tools_dir = Path(tools_dir)
         self._tools: Dict[str, BaseTool] = {}
+        self._tool_sources: Dict[str, str] = {}  # tool_name -> source filename (without .py)
 
     def load_tools(self) -> Dict[str, BaseTool]:
         """
@@ -53,6 +54,7 @@ class ToolLoader:
                         item is not BaseTool):
                         tool_instance = item()
                         self._tools[tool_instance.name] = tool_instance
+                        self._tool_sources[tool_instance.name] = tool_file.stem
 
             except Exception as e:
                 print(f"Error loading tool from {tool_file}: {e}")
@@ -77,6 +79,10 @@ class ToolLoader:
     def get_all_tools(self) -> Dict[str, BaseTool]:
         """Get all loaded tools."""
         return self._tools
+
+    def get_tool_source(self, name: str) -> str:
+        """Get the source filename (without .py) for a tool."""
+        return self._tool_sources.get(name, "")
 
     def get_tool_definitions(self, tool_names: List[str] = None) -> List[dict]:
         """

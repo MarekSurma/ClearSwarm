@@ -1,28 +1,46 @@
 <script setup lang="ts">
+import { ref, computed } from 'vue'
 import type { ToolInfo } from '@/types/agent'
 import { toDisplayName } from '@/utils/nameFormatting'
 import { GRAPH_COLORS } from '@/config/graphColors'
 
-defineProps<{
+const props = defineProps<{
   tools: ToolInfo[]
 }>()
+
+const collapsed = ref(false)
+
+const groupedTools = computed(() => {
+  const filtered = props.tools.filter(t => t.name !== 'end_session')
+  const groups = new Map<string, ToolInfo[]>()
+  for (const tool of filtered) {
+    const group = tool.group || tool.name
+    if (!groups.has(group)) groups.set(group, [])
+    groups.get(group)!.push(tool)
+  }
+  return Array.from(groups.entries())
+})
 </script>
 
 <template>
   <div class="tools-sidebar">
-    <div class="sidebar-header">
-      <h3>Tools</h3>
+    <div class="sidebar-header" @click="collapsed = !collapsed">
+      <h3 v-tooltip.bottom="'Drag tools onto agent nodes in the graph to assign them.'">Tools</h3>
+      <i class="pi collapse-icon" :class="collapsed ? 'pi-chevron-down' : 'pi-chevron-up'" />
     </div>
-    <div class="tool-list">
-      <div
-        v-for="tool in tools"
-        :key="tool.name"
-        class="tool-item"
-        draggable="true"
-        @dragstart="(e: DragEvent) => { e.dataTransfer?.setData('application/tool-name', tool.name); e.dataTransfer!.effectAllowed = 'copy' }"
-        v-tooltip.left="tool.description || undefined"
-      >
-        <div class="item-name">{{ toDisplayName(tool.name) }}</div>
+    <div v-show="!collapsed" class="tool-list">
+      <div v-for="[group, groupTools] in groupedTools" :key="group" class="tool-group">
+        <div class="group-label">{{ toDisplayName(group) }}</div>
+        <div
+          v-for="tool in groupTools"
+          :key="tool.name"
+          class="tool-item"
+          draggable="true"
+          @dragstart="(e: DragEvent) => { e.dataTransfer?.setData('application/tool-name', tool.name); e.dataTransfer!.effectAllowed = 'copy' }"
+          v-tooltip.left="{ value: `<b>${toDisplayName(tool.name)}</b>${tool.description ? '<br><br>' + tool.description : ''}`, escape: false }"
+        >
+          <div class="item-name">{{ toDisplayName(tool.name) }}</div>
+        </div>
       </div>
       <p v-if="tools.length === 0" class="empty-text">No tools found</p>
     </div>
@@ -42,6 +60,8 @@ defineProps<{
   display: flex;
   justify-content: space-between;
   align-items: center;
+  cursor: pointer;
+  user-select: none;
 }
 
 .sidebar-header h3 {
@@ -50,31 +70,50 @@ defineProps<{
   font-weight: 600;
 }
 
+.collapse-icon {
+  font-size: 0.75rem;
+  color: #000;
+}
+
 .tool-list {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.5rem;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
 }
 
+.tool-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.group-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #000;
+  padding: 0.15rem 0.5rem;
+  letter-spacing: 0.03em;
+  text-align: center;
+}
+
 .tool-item {
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 0.45rem 1rem;
-  border-radius: 100px;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
   cursor: grab;
   background: v-bind('GRAPH_COLORS.tool.background');
-  border: 2px solid v-bind('GRAPH_COLORS.tool.border');
+  border: none;
   color: v-bind('GRAPH_COLORS.tool.font');
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: background 0.15s ease;
 }
 
 .tool-item:hover {
   background: v-bind('GRAPH_COLORS.tool.highlightBackground');
-  border-color: v-bind('GRAPH_COLORS.tool.highlightBorder');
 }
 
 .tool-item:active {
