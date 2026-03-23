@@ -124,12 +124,13 @@ class TestToolCallHandler:
         ]
 
         handler = ToolCallHandler()
-        end_session, sync_calls, async_calls = handler.categorize_tool_calls(tool_calls)
+        end_session, sync_calls, async_calls, wait_for_async = handler.categorize_tool_calls(tool_calls)
 
         assert end_session is not None
         assert end_session['tool_name'] == 'end_session'
         assert len(sync_calls) == 2
         assert len(async_calls) == 1
+        assert wait_for_async is None
 
     def test_extract_text_before_end_session(self):
         """Test extracting text before end_session call."""
@@ -449,14 +450,14 @@ class TestAgentOrchestrator:
         assert should_continue is True
 
     async def test_should_continue_generating_with_async(self, mock_agent):
-        """Test continue logic with async calls."""
+        """Test continue logic with async calls - should continue so agent can call wait_for_async_answers."""
         orchestrator = AgentOrchestrator(mock_agent)
 
         sync_calls = []
         async_calls = [{'tool_name': 'long_task'}]
 
         should_continue = orchestrator._should_continue_generating(sync_calls, async_calls)
-        assert should_continue is False
+        assert should_continue is True
 
     async def test_process_task_result(self, mock_agent):
         """Test processing task result."""

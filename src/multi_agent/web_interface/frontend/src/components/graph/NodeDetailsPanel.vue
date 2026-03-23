@@ -110,7 +110,7 @@ function getRoleStyle(role: string) {
           <div class="conversation">
             <div
               v-for="(msg, idx) in agentLog.interactions"
-              :key="idx"
+              :key="`${msg.role}-${idx}-${msg.timestamp || idx}`"
               class="message"
               :class="`role-${msg.role}`"
             >

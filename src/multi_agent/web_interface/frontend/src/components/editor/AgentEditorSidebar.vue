@@ -8,6 +8,7 @@ import { GRAPH_COLORS } from '@/config/graphColors'
 const props = defineProps<{
   agents: AgentInfo[]
   selectedName: string | null
+  hoveredName?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -88,7 +89,7 @@ function submitClone(agentName: string) {
       <template v-for="agent in agents" :key="agent.name">
         <div
           class="agent-item"
-          :class="{ active: agent.name === selectedName }"
+          :class="{ active: agent.name === selectedName, 'graph-hovered': hoveredName && agent.name === hoveredName && agent.name !== selectedName }"
           draggable="true"
           @dragstart="(e: DragEvent) => { e.dataTransfer?.setData('application/agent-name', agent.name); e.dataTransfer!.effectAllowed = 'copy' }"
           @click="emit('select', agent.name)"
@@ -198,6 +199,11 @@ function submitClone(agentName: string) {
 
 .agent-item.active {
   background: v-bind('GRAPH_COLORS.agent.highlightBackground');
+}
+
+.agent-item.graph-hovered {
+  background: v-bind('GRAPH_COLORS.agent.highlightBackground');
+  transition: background 0.15s ease;
 }
 
 .item-name {

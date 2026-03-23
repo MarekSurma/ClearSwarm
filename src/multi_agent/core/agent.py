@@ -248,7 +248,12 @@ class Agent:
                     )
                     final_response = response
 
-                # Wait for task results
+                # If in batch-wait mode, collect all results at once
+                if orchestrator.waiting_for_all_results:
+                    llm_should_continue = await orchestrator.collect_and_deliver_all_results(session_ended)
+                    continue
+
+                # Wait for task results (one-by-one mode)
                 has_pending = await orchestrator.task_manager.has_pending_tasks()
                 task_result = await orchestrator.wait_for_task_result(has_pending, llm_should_continue)
 

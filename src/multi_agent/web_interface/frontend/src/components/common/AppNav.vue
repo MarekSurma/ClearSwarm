@@ -244,6 +244,7 @@ onUnmounted(() => {
             severity="success"
             size="small"
             class="go-button"
+            v-tooltip.bottom="'Confirm switch to the selected project'"
             @click="handleGoClick"
           >
             <span class="pulsing-dot"></span>
@@ -259,6 +260,7 @@ onUnmounted(() => {
                 severity="secondary"
                 size="small"
                 text
+                v-tooltip.bottom="`Duplicate project '${selectedProject.project_name}' into a new project`"
                 @click="() => { targetProjectForClone = selectedProject; showCloneModal = true }"
               />
               <Button
@@ -268,6 +270,7 @@ onUnmounted(() => {
                 size="small"
                 text
                 :disabled="isSelectedDefault"
+                v-tooltip.bottom="isSelectedDefault ? 'The default project cannot be deleted' : `Permanently delete project '${selectedProject.project_name}'`"
                 @click="() => { targetProjectForDelete = selectedProject; showDeleteModal = true }"
               />
               <Button
@@ -276,6 +279,7 @@ onUnmounted(() => {
                 severity="primary"
                 size="small"
                 text
+                v-tooltip.bottom="'Create a new empty project'"
                 @click="showNewModal = true"
               />
             </div>

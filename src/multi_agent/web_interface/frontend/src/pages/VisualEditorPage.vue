@@ -19,6 +19,7 @@ const toast = useToast()
 
 const tools = ref<ToolInfo[]>([])
 const selectedAgentName = ref<string | null>(null)
+const hoveredGraphAgentName = ref<string | null>(null)
 const selectedNodeAgentDetail = ref<AgentDetail | null>(null)
 const showEditModal = ref(false)
 const showCreateModal = ref(false)
@@ -318,6 +319,7 @@ async function handleDeleteAgent(agentName: string) {
           @drop-tool="handleDropTool"
           @remove-node="handleQuickRemoveNode"
           @remove-self-loop="handleRemoveSelfLoop"
+          @node-hover="(name) => hoveredGraphAgentName = name"
         />
       </div>
 
@@ -327,6 +329,7 @@ async function handleDeleteAgent(agentName: string) {
           <AgentEditorSidebar
             :agents="agents"
             :selectedName="selectedAgentName"
+            :hoveredName="hoveredGraphAgentName"
             @select="selectAgent"
             @new="handleNewAgent"
             @delete="handleDeleteAgent"

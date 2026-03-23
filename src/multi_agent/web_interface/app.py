@@ -3,6 +3,7 @@ FastAPI application for multi-agent web interface.
 Provides REST API and WebSocket endpoints for agent management and monitoring.
 """
 import asyncio
+import os
 import signal
 from pathlib import Path
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -26,9 +27,13 @@ STATIC_DIR = _DIST_DIR if _DIST_DIR.exists() else _STATIC_DIR
 
 
 def _signal_handler(signum, frame):
-    """Handle SIGINT/SIGTERM by requesting LLM shutdown."""
-    print("\n[Received shutdown signal, stopping LLM streams...]")
+    """Handle SIGINT/SIGTERM by requesting LLM shutdown, then propagate to uvicorn."""
+    # Use os.write instead of print() - print() is not reentrant-safe in signal handlers
+    os.write(1, b"\n[Received shutdown signal, stopping LLM streams...]\n")
     request_shutdown()
+    # Restore default handler and re-raise so uvicorn can shut down normally
+    signal.signal(signum, signal.SIG_DFL)
+    os.kill(os.getpid(), signum)
 
 
 @asynccontextmanager

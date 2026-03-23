@@ -93,10 +93,15 @@ export function useNodeDetails() {
       try {
         if (nodeType.value === 'agent') {
           const logData = await api.getExecutionLog(selectedNodeId.value)
-          agentLog.value = logData
-          lastMessageCount = logData.interactions?.length || 0
+          const newCount = logData.interactions?.length || 0
+          const iterationsChanged = logData.total_iterations !== agentLog.value?.total_iterations
+          if (newCount !== lastMessageCount || iterationsChanged) {
+            agentLog.value = logData
+            lastMessageCount = newCount
+          }
           if (logData.session_ended_explicitly !== null) {
             isRunning.value = false
+            agentLog.value = logData // ensure final state is captured
             stopRefresh()
           }
         }

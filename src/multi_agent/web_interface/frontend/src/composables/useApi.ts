@@ -1,6 +1,6 @@
 import type { AgentInfo, AgentDetail, CreateAgentRequest, UpdateAgentRequest, RunAgentRequest, RunAgentResponse, StopAllResponse, ToolInfo } from '@/types/agent'
 import type { AgentExecution, ExecutionTree, ExecutionLog, ToolExecution } from '@/types/execution'
-import type { GraphData } from '@/types/graph'
+import type { GraphData, GraphResponse } from '@/types/graph'
 import type { ProjectInfo, CreateProjectRequest, CloneProjectRequest } from '@/types/project'
 import type { ScheduleInfo, CreateScheduleRequest, UpdateScheduleRequest } from '@/types/schedule'
 import { useProject } from './useProject'
@@ -82,8 +82,10 @@ export function useApi() {
   const getExecutionTree = (id: string) => request<ExecutionTree>(`/api/executions/${id}/tree`)
   const getExecutionLog = (id: string) => request<ExecutionLog>(`/api/executions/${id}/log`)
   const getExecutionTools = (id: string) => request<ToolExecution[]>(`/api/executions/${id}/tools`)
-  // ETag-aware graph fetching to avoid re-processing unchanged data
+  // ETag-aware graph fetching (legacy, kept for backward compatibility)
   let _graphEtag: string | null = null
+
+  const resetGraphEtag = () => { _graphEtag = null }
 
   const getExecutionGraph = async (id: string): Promise<GraphData | null> => {
     const headers: Record<string, string> = {}
@@ -97,6 +99,25 @@ export function useApi() {
     }
     _graphEtag = response.headers.get('etag')
     return response.json()
+  }
+
+  // Sequence-based incremental graph updates
+  let _graphSequence: number = 0
+
+  const resetGraphSequence = () => { _graphSequence = 0 }
+
+  const getGraphDelta = async (id: string): Promise<GraphResponse | null> => {
+    const response = await fetch(
+      `${API_BASE}/api/executions/${id}/graph/delta?since=${_graphSequence}`
+    )
+    if (response.status === 304) return null
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }))
+      throw new Error(error.detail || `HTTP ${response.status}`)
+    }
+    const data = await response.json()
+    _graphSequence = data.current_sequence
+    return data
   }
 
   // Projects
@@ -157,6 +178,9 @@ export function useApi() {
     getExecutionLog,
     getExecutionTools,
     getExecutionGraph,
+    resetGraphEtag,
+    getGraphDelta,
+    resetGraphSequence,
     getProjects,
     createProject,
     cloneProject,

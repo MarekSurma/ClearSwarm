@@ -35,7 +35,7 @@ watch(
       await nextTick()
       if (graphContainer.value) {
         nodeDetails.clearSelection()
-        graph.initializeGraph(props.agentId, graphContainer.value, handleNodeClick)
+        await graph.initializeGraph(props.agentId, graphContainer.value, handleNodeClick)
       }
     } else if (!visible) {
       graph.cleanup()
@@ -141,4 +141,5 @@ function close() {
   min-height: 400px;
   background: rgb(61, 148, 181);
 }
+
 </style>

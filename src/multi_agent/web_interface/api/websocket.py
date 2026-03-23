@@ -62,9 +62,18 @@ async def websocket_updates(websocket: WebSocket, project: str = "default"):
     await manager.connect(websocket)
 
     try:
-        # Send initial state
+        # Send initial state (limited to keep payload manageable)
         db = get_database()
-        executions = db.get_all_executions(project_dir=project)
+        all_ws_execs = await asyncio.to_thread(db.get_all_executions, project_dir=project)
+        ws_limit = 500
+        if len(all_ws_execs) > ws_limit:
+            roots_and_running = [e for e in all_ws_execs if e['parent_agent_id'] is None or e['completed_at'] is None]
+            rest = [e for e in all_ws_execs if e['parent_agent_id'] is not None and e['completed_at'] is not None]
+            rest.sort(key=lambda e: e['started_at'], reverse=True)
+            remaining = max(0, ws_limit - len(roots_and_running))
+            executions = roots_and_running + rest[:remaining]
+        else:
+            executions = all_ws_execs
 
         await manager.send_personal({
             "type": "initial_state",
@@ -96,8 +105,8 @@ async def websocket_updates(websocket: WebSocket, project: str = "default"):
                 # Timeout is expected - send update
                 pass
 
-            # Get current state
-            current_executions = db.get_all_executions(project_dir=project)
+            # Get current state (run in thread to avoid blocking event loop)
+            current_executions = await asyncio.to_thread(db.get_all_executions, project_dir=project)
 
             # Build current snapshot for comparison
             current_snapshot = {
@@ -109,7 +118,16 @@ async def websocket_updates(websocket: WebSocket, project: str = "default"):
             if current_snapshot != last_execution_snapshot:
                 last_execution_snapshot = current_snapshot
 
-                # Send update
+                # Send update (limited to keep payload manageable)
+                if len(current_executions) > ws_limit:
+                    ws_roots_running = [e for e in current_executions if e['parent_agent_id'] is None or e['completed_at'] is None]
+                    ws_rest = [e for e in current_executions if e['parent_agent_id'] is not None and e['completed_at'] is not None]
+                    ws_rest.sort(key=lambda e: e['started_at'], reverse=True)
+                    ws_remaining = max(0, ws_limit - len(ws_roots_running))
+                    limited_executions = ws_roots_running + ws_rest[:ws_remaining]
+                else:
+                    limited_executions = current_executions
+
                 await manager.send_personal({
                     "type": "executions_update",
                     "executions": [
@@ -122,7 +140,7 @@ async def websocket_updates(websocket: WebSocket, project: str = "default"):
                             "current_state": exec.get('current_state', 'generating'),
                             "is_running": exec['completed_at'] is None
                         }
-                        for exec in current_executions
+                        for exec in limited_executions
                     ]
                 }, websocket)
 
@@ -160,7 +178,7 @@ async def websocket_agent_detail(websocket: WebSocket, agent_id: str):
 
     try:
         # Verify agent exists
-        execution = db.get_agent_execution(agent_id)
+        execution = await asyncio.to_thread(db.get_agent_execution, agent_id)
         if not execution:
             await manager.send_personal({
                 "type": "error",
@@ -169,7 +187,7 @@ async def websocket_agent_detail(websocket: WebSocket, agent_id: str):
             return
 
         # Send initial agent state
-        tool_execs = db.get_tool_executions(agent_id)
+        tool_execs = await asyncio.to_thread(db.get_tool_executions, agent_id)
 
         await manager.send_personal({
             "type": "agent_state",
@@ -201,9 +219,9 @@ async def websocket_agent_detail(websocket: WebSocket, agent_id: str):
             except asyncio.TimeoutError:
                 pass
 
-            # Check for updates
-            execution = db.get_agent_execution(agent_id)
-            tool_execs = db.get_tool_executions(agent_id)
+            # Check for updates (run in thread to avoid blocking event loop)
+            execution = await asyncio.to_thread(db.get_agent_execution, agent_id)
+            tool_execs = await asyncio.to_thread(db.get_tool_executions, agent_id)
 
             # Check if tool count changed or agent completed
             if len(tool_execs) != last_tool_count or execution['completed_at'] != last_completed:

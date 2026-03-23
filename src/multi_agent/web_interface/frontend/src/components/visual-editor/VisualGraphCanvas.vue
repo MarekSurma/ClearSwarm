@@ -11,6 +11,7 @@ const emit = defineEmits<{
   dropTool: [toolName: string, targetAgentName: string]
   removeNode: [nodeId: string]
   removeSelfLoop: [agentName: string]
+  nodeHover: [agentName: string | null]
 }>()
 
 defineExpose({
@@ -69,6 +70,13 @@ function handleNodeHover(nodeId: string) {
 
   hoveredNodeId.value = nodeId
 
+  // Emit hovered agent name to parent
+  if (nodeId.startsWith('agent::')) {
+    emit('nodeHover', nodeId.replace('agent::', ''))
+  } else {
+    emit('nodeHover', null)
+  }
+
   // Self-loop button: show for any agent node that has a self-loop
   if (nodeId.startsWith('agent::') && graph.hasSelfLoop(nodeId)) {
     updateSelfLoopBtnPosition(nodeId)
@@ -91,6 +99,7 @@ function handleNodeBlur() {
     showRemoveBtn.value = false
     showSelfLoopBtn.value = false
     hoveredNodeId.value = null
+    emit('nodeHover', null)
   }, 200)
 }
 
@@ -102,6 +111,7 @@ function leaveRemoveBtn() {
   showRemoveBtn.value = false
   showSelfLoopBtn.value = false
   hoveredNodeId.value = null
+  emit('nodeHover', null)
 }
 
 function handleRemoveClick() {

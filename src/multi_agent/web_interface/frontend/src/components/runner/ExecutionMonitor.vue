@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import Tabs from 'primevue/tabs'
 import TabList from 'primevue/tablist'
 import Tab from 'primevue/tab'
@@ -24,7 +24,15 @@ const emit = defineEmits<{
 
 const toast = useToast()
 const api = useApi()
+const MAX_DISPLAY = 100
+
+const activeTab = ref('roots')
 const stopping = ref(false)
+
+const displayedRoot = computed(() => props.rootExecutions.slice(0, MAX_DISPLAY))
+const hiddenRootCount = computed(() => Math.max(0, props.rootExecutions.length - MAX_DISPLAY))
+const displayedRunning = computed(() => props.runningExecutions.slice(0, MAX_DISPLAY))
+const hiddenRunningCount = computed(() => Math.max(0, props.runningExecutions.length - MAX_DISPLAY))
 
 async function stopAll() {
   stopping.value = true
@@ -54,7 +62,7 @@ async function stopAll() {
       />
     </div>
 
-    <Tabs value="roots">
+    <Tabs v-model:value="activeTab">
       <TabList>
         <Tab value="roots">All</Tab>
         <Tab value="running">Running</Tab>
@@ -64,11 +72,14 @@ async function stopAll() {
           <div class="execution-list">
             <template v-if="rootExecutions.length > 0">
               <ExecutionCard
-                v-for="exec in rootExecutions"
-                :key="exec.agent_id"
+                v-for="exec in displayedRoot"
+                :key="'root-' + exec.agent_id"
                 :execution="exec"
                 @view-graph="emit('viewGraph', $event)"
               />
+              <p v-if="hiddenRootCount > 0" class="overflow-text">
+                + {{ hiddenRootCount }} more ({{ rootExecutions.length }} total)
+              </p>
             </template>
             <p v-else class="empty-text">No executions found</p>
           </div>
@@ -77,11 +88,14 @@ async function stopAll() {
           <div class="execution-list">
             <template v-if="runningExecutions.length > 0">
               <ExecutionCard
-                v-for="exec in runningExecutions"
-                :key="exec.agent_id"
+                v-for="exec in displayedRunning"
+                :key="'running-' + exec.agent_id"
                 :execution="exec"
                 @view-graph="emit('viewGraph', $event)"
               />
+              <p v-if="hiddenRunningCount > 0" class="overflow-text">
+                + {{ hiddenRunningCount }} more ({{ runningExecutions.length }} total)
+              </p>
             </template>
             <p v-else class="empty-text">No running agents</p>
           </div>
@@ -123,5 +137,12 @@ async function stopAll() {
   color: var(--p-text-muted-color);
   text-align: center;
   padding: 2rem;
+}
+
+.overflow-text {
+  color: var(--p-text-muted-color);
+  text-align: center;
+  padding: 0.75rem;
+  font-size: 0.85rem;
 }
 </style>

@@ -12,6 +12,7 @@ from datetime import datetime
 # Constants
 POLL_TIMEOUT_SECONDS = 0.1  # Quick poll timeout for checking task results
 END_SESSION_TOOL = 'end_session'  # Tool name for ending agent session
+WAIT_FOR_ASYNC_TOOL = 'wait_for_async_answers'  # Tool name for batch-waiting on async results
 
 
 def _truncate_preview(text: str, max_len: int = 200) -> str:
@@ -61,29 +62,32 @@ class ToolCallHandler:
         return tool_calls
 
     @staticmethod
-    def categorize_tool_calls(tool_calls: List[Dict[str, Any]]) -> Tuple[Optional[Dict], List[Dict], List[Dict]]:
+    def categorize_tool_calls(tool_calls: List[Dict[str, Any]]) -> Tuple[Optional[Dict], List[Dict], List[Dict], Optional[Dict]]:
         """
-        Categorize tool calls into end_session, synchronous, and asynchronous.
+        Categorize tool calls into end_session, synchronous, asynchronous, and wait_for_async.
 
         Args:
             tool_calls: List of tool call dictionaries
 
         Returns:
-            Tuple of (end_session_call, sync_tool_calls, async_tool_calls)
+            Tuple of (end_session_call, sync_tool_calls, async_tool_calls, wait_for_async_call)
         """
         end_session_call = None
         sync_tool_calls = []
         async_tool_calls = []
+        wait_for_async_call = None
 
         for tool_call in tool_calls:
             if tool_call['tool_name'] == END_SESSION_TOOL:
                 end_session_call = tool_call
+            elif tool_call['tool_name'] == WAIT_FOR_ASYNC_TOOL:
+                wait_for_async_call = tool_call
             elif tool_call.get('call_mode', 'synchronous') == 'synchronous':
                 sync_tool_calls.append(tool_call)
             else:
                 async_tool_calls.append(tool_call)
 
-        return end_session_call, sync_tool_calls, async_tool_calls
+        return end_session_call, sync_tool_calls, async_tool_calls, wait_for_async_call
 
     @staticmethod
     def extract_text_before_end_session(response: str) -> str:
@@ -372,6 +376,30 @@ class ConversationManager:
         )
         self.add_system_message(warning_msg)
 
+    def add_tasks_launched_with_wait_option(self, task_ids: List[str]) -> None:
+        """Add notification about launched tasks with wait_for_async_answers option."""
+        task_list = self.prompts.format_task_list(task_ids)
+        notification_msg = self.prompts.get_runtime_message(
+            'tasks_launched_with_wait_option',
+            task_count=len(task_ids),
+            task_list=task_list
+        )
+        self.add_system_message(notification_msg)
+
+    def add_all_tasks_completed(self, results: List[Tuple[str, str]]) -> None:
+        """Add all task results as a single batch message."""
+        msg = self.prompts.get_runtime_message(
+            'all_tasks_completed_batch_header',
+            task_count=len(results)
+        )
+        for task_id, result in results:
+            msg += self.prompts.get_runtime_message(
+                'all_tasks_completed_batch_item',
+                task_id=task_id,
+                result=result
+            )
+        self.add_user_message(msg)
+
     def add_no_tool_call_warning(self) -> None:
         """Add warning about missing tool call."""
         reminder_msg = self.prompts.get_runtime_message('no_tool_call_warning')
@@ -400,6 +428,12 @@ class AgentOrchestrator:
         self.tool_handler = ToolCallHandler()
         self.task_manager = TaskManager()
         self.conversation = ConversationManager(agent.messages, agent.prompts)
+        self._waiting_for_all_results = False
+
+    @property
+    def waiting_for_all_results(self) -> bool:
+        """Whether the agent is in batch-wait mode for async results."""
+        return self._waiting_for_all_results
 
     async def handle_iteration(
         self,
@@ -479,7 +513,7 @@ class AgentOrchestrator:
                 valid_tool_calls.append(tool_call)
 
         # Categorize valid tool calls
-        end_session_call, sync_calls, async_calls = self.tool_handler.categorize_tool_calls(valid_tool_calls)
+        end_session_call, sync_calls, async_calls, wait_for_async_call = self.tool_handler.categorize_tool_calls(valid_tool_calls)
 
         # Add assistant message
         self.conversation.add_assistant_message(response)
@@ -497,9 +531,13 @@ class AgentOrchestrator:
         if end_session_call:
             return await self._handle_end_session(end_session_call, response, launched_task_ids)
 
-        # Notify about launched tasks
+        # Handle wait_for_async_answers
+        if wait_for_async_call:
+            return await self._handle_wait_for_async(response, launched_task_ids, sync_calls)
+
+        # Notify about launched tasks (with wait option info)
         if launched_task_ids:
-            self.conversation.add_tasks_launched_notification(launched_task_ids)
+            self.conversation.add_tasks_launched_with_wait_option(launched_task_ids)
 
         # Determine if should continue
         should_continue = self._should_continue_generating(sync_calls, async_calls)
@@ -636,6 +674,82 @@ class AgentOrchestrator:
 
         return final_response, False, True
 
+    async def _handle_wait_for_async(
+        self,
+        response: str,
+        launched_task_ids: List[str],
+        sync_calls: List[Dict[str, Any]]
+    ) -> Tuple[str, bool, bool]:
+        """
+        Handle wait_for_async_answers tool call.
+        Sets batch-wait mode so all async results are collected and delivered at once.
+
+        Args:
+            response: LLM response
+            launched_task_ids: Task IDs launched in this turn
+            sync_calls: Sync calls executed in this turn
+
+        Returns:
+            Tuple of (response, should_continue, session_ended)
+        """
+        # Notify about any newly launched tasks
+        if launched_task_ids:
+            self.conversation.add_tasks_launched_notification(launched_task_ids)
+
+        has_outstanding = await self.task_manager.has_outstanding_tasks()
+
+        if has_outstanding:
+            self._waiting_for_all_results = True
+            self.conversation.add_system_message(
+                self.agent.prompts.get_runtime_message('wait_for_async_acknowledged')
+            )
+            self.agent.db.update_agent_state(self.agent.agent_id, 'waiting')
+            return response, False, False
+        else:
+            # No outstanding tasks - treat as no-op
+            self.conversation.add_system_message(
+                self.agent.prompts.get_runtime_message('wait_for_async_no_tasks')
+            )
+            # Continue only if there were sync results to react to
+            should_continue = bool(sync_calls)
+            if should_continue:
+                self.agent.db.update_agent_state(self.agent.agent_id, 'generating')
+            return response, should_continue, False
+
+    async def collect_and_deliver_all_results(self, session_ended: bool) -> bool:
+        """
+        Collect all outstanding async results and deliver them as a single batch message.
+
+        Args:
+            session_ended: Whether the session has ended
+
+        Returns:
+            True if agent should continue generating (llm_should_continue)
+        """
+        results = []
+
+        while await self.task_manager.has_outstanding_tasks():
+            task_result = await self.task_manager.wait_for_result(timeout=None)
+            if task_result:
+                task_id, result = task_result
+                self.agent._log(
+                    self.agent.prompts.get_log_message('task_completed_log', task_id=task_id)
+                )
+                result_preview = result[:200] + "..." if len(result) > 200 else result
+                self.agent._log(
+                    self.agent.prompts.get_log_message('task_result_log', result=result_preview)
+                )
+                await self.task_manager.remove_task(task_id)
+                await self.task_manager.mark_task_processed()
+                results.append((task_id, result))
+
+        # Deliver batch results
+        if results and not session_ended:
+            self.conversation.add_all_tasks_completed(results)
+
+        self._waiting_for_all_results = False
+        return not session_ended
+
     def _should_continue_generating(self, sync_calls: List, async_calls: List) -> bool:
         """
         Determine if agent should continue generating.
@@ -647,12 +761,10 @@ class AgentOrchestrator:
         Returns:
             True if agent should generate next response
         """
-        if sync_calls and not async_calls:
-            # Only sync calls - results in conversation, can continue
+        if sync_calls or async_calls:
+            # Continue after any tool calls - agent can process results
+            # or decide to call wait_for_async_answers
             return True
-        elif async_calls:
-            # Async calls launched - wait for results
-            return False
         else:
             # No calls executed (shouldn't happen)
             return False

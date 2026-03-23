@@ -31,3 +31,25 @@ export interface GraphStats {
   completed: number
   totalErrors: number
 }
+
+export interface GraphChange {
+  sequence: number
+  change_type: 'node_add' | 'node_update' | 'node_remove' | 'edge_add' | 'edge_update' | 'edge_remove'
+  entity_id: string
+  data: GraphNode | GraphEdge | null
+}
+
+export interface GraphDeltaResponse {
+  type: 'delta'
+  current_sequence: number
+  changes: GraphChange[]
+}
+
+export interface GraphSnapshotResponse {
+  type: 'snapshot'
+  current_sequence: number
+  nodes: GraphNode[]
+  edges: GraphEdge[]
+}
+
+export type GraphResponse = GraphDeltaResponse | GraphSnapshotResponse
