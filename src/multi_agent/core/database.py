@@ -121,6 +121,18 @@ class AgentDatabase:
             if 'project_dir' not in agent_columns:
                 cursor.execute("ALTER TABLE agent_executions ADD COLUMN project_dir TEXT DEFAULT 'default'")
 
+            # Add question column to agent_executions if it doesn't exist (migration)
+            cursor.execute("PRAGMA table_info(agent_executions)")
+            agent_columns = [col[1] for col in cursor.fetchall()]
+            if 'question' not in agent_columns:
+                cursor.execute("ALTER TABLE agent_executions ADD COLUMN question TEXT")
+
+            # Add final_response column to agent_executions if it doesn't exist (migration)
+            cursor.execute("PRAGMA table_info(agent_executions)")
+            agent_columns = [col[1] for col in cursor.fetchall()]
+            if 'final_response' not in agent_columns:
+                cursor.execute("ALTER TABLE agent_executions ADD COLUMN final_response TEXT")
+
             # Index on project_dir (must be after migration that adds the column)
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_agent_executions_project
@@ -164,7 +176,8 @@ class AgentDatabase:
         parent_agent_id: Optional[str] = None,
         parent_agent_name: str = "root",
         call_mode: str = "synchronous",
-        project_dir: str = "default"
+        project_dir: str = "default",
+        question: Optional[str] = None
     ) -> str:
         """
         Create a new agent execution record.
@@ -175,6 +188,7 @@ class AgentDatabase:
             parent_agent_name: Name of parent agent ("root" if no parent)
             call_mode: Execution mode ('synchronous' or 'asynchronous')
             project_dir: Project directory for this execution
+            question: Initial question/message for this agent
 
         Returns:
             agent_id: Unique identifier for this execution
@@ -186,19 +200,20 @@ class AgentDatabase:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO agent_executions
-                (agent_id, agent_name, parent_agent_id, parent_agent_name, started_at, completed_at, call_mode, project_dir)
-                VALUES (?, ?, ?, ?, ?, NULL, ?, ?)
-            """, (agent_id, agent_name, parent_agent_id, parent_agent_name, started_at, call_mode, project_dir))
+                (agent_id, agent_name, parent_agent_id, parent_agent_name, started_at, completed_at, call_mode, project_dir, question)
+                VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)
+            """, (agent_id, agent_name, parent_agent_id, parent_agent_name, started_at, call_mode, project_dir, question))
             conn.commit()
 
         return agent_id
 
-    def complete_agent_execution(self, agent_id: str):
+    def complete_agent_execution(self, agent_id: str, final_response: Optional[str] = None):
         """
         Mark an agent execution as completed.
 
         Args:
             agent_id: ID of the agent execution to complete
+            final_response: Final response from the agent
         """
         completed_at = datetime.now().isoformat()
 
@@ -206,9 +221,26 @@ class AgentDatabase:
             cursor = conn.cursor()
             cursor.execute("""
                 UPDATE agent_executions
-                SET completed_at = ?, current_state = 'completed'
+                SET completed_at = ?, current_state = 'completed', final_response = ?
                 WHERE agent_id = ?
-            """, (completed_at, agent_id))
+            """, (completed_at, final_response, agent_id))
+            conn.commit()
+
+    def update_agent_question(self, agent_id: str, question: str):
+        """
+        Update the question for an agent execution.
+
+        Args:
+            agent_id: ID of the agent execution
+            question: Question/message for the agent
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE agent_executions
+                SET question = ?
+                WHERE agent_id = ?
+            """, (question, agent_id))
             conn.commit()
 
     def update_log_file(self, agent_id: str, log_file: str):
@@ -242,7 +274,7 @@ class AgentDatabase:
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT agent_id, agent_name, parent_agent_id, parent_agent_name,
-                       started_at, completed_at, log_file, project_dir
+                       started_at, completed_at, log_file, project_dir, question, final_response
                 FROM agent_executions
                 WHERE agent_id = ?
             """, (agent_id,))
@@ -257,7 +289,9 @@ class AgentDatabase:
                     'started_at': row[4],
                     'completed_at': row[5],
                     'log_file': row[6],
-                    'project_dir': row[7] if len(row) > 7 else 'default'
+                    'project_dir': row[7] if len(row) > 7 else 'default',
+                    'question': row[8] if len(row) > 8 else None,
+                    'final_response': row[9] if len(row) > 9 else None
                 }
             return None
 
@@ -277,7 +311,8 @@ class AgentDatabase:
             if project_dir:
                 cursor.execute("""
                     SELECT agent_id, agent_name, parent_agent_id, parent_agent_name,
-                           started_at, completed_at, current_state, call_mode, log_file, project_dir
+                           started_at, completed_at, current_state, call_mode, log_file, project_dir,
+                           question, final_response
                     FROM agent_executions
                     WHERE project_dir = ?
                     ORDER BY started_at DESC
@@ -285,7 +320,8 @@ class AgentDatabase:
             else:
                 cursor.execute("""
                     SELECT agent_id, agent_name, parent_agent_id, parent_agent_name,
-                           started_at, completed_at, current_state, call_mode, log_file, project_dir
+                           started_at, completed_at, current_state, call_mode, log_file, project_dir,
+                           question, final_response
                     FROM agent_executions
                     ORDER BY started_at DESC
                 """)
@@ -303,7 +339,9 @@ class AgentDatabase:
                     'current_state': row[6] if len(row) > 6 else 'generating',
                     'call_mode': row[7] if len(row) > 7 else 'synchronous',
                     'log_file': row[8] if len(row) > 8 else None,
-                    'project_dir': row[9] if len(row) > 9 else 'default'
+                    'project_dir': row[9] if len(row) > 9 else 'default',
+                    'question': row[10] if len(row) > 10 else None,
+                    'final_response': row[11] if len(row) > 11 else None
                 }
                 for row in rows
             ]

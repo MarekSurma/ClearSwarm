@@ -30,6 +30,8 @@ class AgentExecution(BaseModel):
     call_mode: str
     is_running: bool
     log_file: Optional[str]
+    question: Optional[str]
+    final_response: Optional[str]
 
 
 class ToolExecution(BaseModel):
@@ -98,7 +100,9 @@ def list_executions(project: str = Query("default"), limit: int = Query(500, ge=
             current_state=exec.get('current_state', 'generating'),
             call_mode=exec.get('call_mode', 'synchronous'),
             is_running=exec['completed_at'] is None,
-            log_file=exec.get('log_file')
+            log_file=exec.get('log_file'),
+            question=exec.get('question'),
+            final_response=exec.get('final_response')
         )
         for exec in executions
     ]
@@ -122,7 +126,9 @@ def list_root_executions(project: str = Query("default")):
             current_state=exec.get('current_state', 'generating'),
             call_mode=exec.get('call_mode', 'synchronous'),
             is_running=exec['completed_at'] is None,
-            log_file=exec.get('log_file')
+            log_file=exec.get('log_file'),
+            question=exec.get('question'),
+            final_response=exec.get('final_response')
         )
         for exec in executions
         if exec['parent_agent_id'] is None
@@ -154,7 +160,9 @@ def get_execution(agent_id: str):
         current_state=exec_info.get('current_state', 'generating') if exec_info else 'generating',
         call_mode=exec_info.get('call_mode', 'synchronous') if exec_info else 'synchronous',
         is_running=execution['completed_at'] is None,
-        log_file=execution.get('log_file')
+        log_file=execution.get('log_file'),
+        question=execution.get('question'),
+        final_response=execution.get('final_response')
     )
 
 

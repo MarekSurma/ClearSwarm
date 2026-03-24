@@ -12,7 +12,6 @@ from datetime import datetime
 # Constants
 POLL_TIMEOUT_SECONDS = 0.1  # Quick poll timeout for checking task results
 END_SESSION_TOOL = 'end_session'  # Tool name for ending agent session
-WAIT_FOR_ASYNC_TOOL = 'wait_for_async_answers'  # Tool name for batch-waiting on async results
 
 
 def _truncate_preview(text: str, max_len: int = 200) -> str:
@@ -32,22 +31,36 @@ class ToolCallHandler:
             text: Text that may contain multiple tool calls
 
         Returns:
-            List of dictionaries with tool_name, parameters, and call_mode
+            List of dictionaries with tool_name, parameters, call_mode, and wait_for_all_finished
         """
-        pattern = r'<tool_call>\s*<tool_name>(.*?)</tool_name>(?:\s*<call_mode>(.*?)</call_mode>)?\s*<parameters>(.*?)</parameters>\s*</tool_call>'
-        matches = re.finditer(pattern, text, re.DOTALL)
+        # More robust extraction that handles tags in any order
+        tool_call_pattern = r'<tool_call>(.*?)</tool_call>'
+        matches = re.finditer(tool_call_pattern, text, re.DOTALL)
 
         tool_calls = []
         for match in matches:
-            tool_name = match.group(1).strip()
-            call_mode = match.group(2).strip() if match.group(2) else 'synchronous'
-            parameters_str = match.group(3).strip()
+            content = match.group(1)
+            
+            # Extract tags within the tool_call block
+            tool_name_match = re.search(r'<tool_name>(.*?)</tool_name>', content, re.DOTALL)
+            call_mode_match = re.search(r'<call_mode>(.*?)</call_mode>', content, re.DOTALL)
+            wait_match = re.search(r'<wait_for_all_finished>(.*?)</wait_for_all_finished>', content, re.DOTALL)
+            parameters_match = re.search(r'<parameters>(.*?)</parameters>', content, re.DOTALL)
+            
+            if not tool_name_match or not parameters_match:
+                continue
+                
+            tool_name = tool_name_match.group(1).strip()
+            call_mode = call_mode_match.group(1).strip() if call_mode_match else 'synchronous'
+            wait_for_all = wait_match.group(1).strip().lower() == 'true' if wait_match else False
+            parameters_str = parameters_match.group(1).strip()
 
             try:
                 parameters = json.loads(parameters_str, strict=False)
                 tool_calls.append({
                     'tool_name': tool_name,
                     'call_mode': call_mode,
+                    'wait_for_all_finished': wait_for_all,
                     'parameters': parameters
                 })
             except json.JSONDecodeError as e:
@@ -55,6 +68,7 @@ class ToolCallHandler:
                 tool_calls.append({
                     'tool_name': tool_name,
                     'call_mode': call_mode,
+                    'wait_for_all_finished': wait_for_all,
                     'parameters': {},
                     'parse_error': f"Invalid JSON in parameters: {str(e)}"
                 })
@@ -62,32 +76,33 @@ class ToolCallHandler:
         return tool_calls
 
     @staticmethod
-    def categorize_tool_calls(tool_calls: List[Dict[str, Any]]) -> Tuple[Optional[Dict], List[Dict], List[Dict], Optional[Dict]]:
+    def categorize_tool_calls(tool_calls: List[Dict[str, Any]]) -> Tuple[Optional[Dict], List[Dict], List[Dict], bool]:
         """
-        Categorize tool calls into end_session, synchronous, asynchronous, and wait_for_async.
+        Categorize tool calls into end_session, synchronous, and asynchronous.
 
         Args:
             tool_calls: List of tool call dictionaries
 
         Returns:
-            Tuple of (end_session_call, sync_tool_calls, async_tool_calls, wait_for_async_call)
+            Tuple of (end_session_call, sync_tool_calls, async_tool_calls, wait_for_all_finished_requested)
         """
         end_session_call = None
         sync_tool_calls = []
         async_tool_calls = []
-        wait_for_async_call = None
+        wait_for_all_finished_requested = False
 
         for tool_call in tool_calls:
+            if tool_call.get('wait_for_all_finished'):
+                wait_for_all_finished_requested = True
+                
             if tool_call['tool_name'] == END_SESSION_TOOL:
                 end_session_call = tool_call
-            elif tool_call['tool_name'] == WAIT_FOR_ASYNC_TOOL:
-                wait_for_async_call = tool_call
             elif tool_call.get('call_mode', 'synchronous') == 'synchronous':
                 sync_tool_calls.append(tool_call)
             else:
                 async_tool_calls.append(tool_call)
 
-        return end_session_call, sync_tool_calls, async_tool_calls, wait_for_async_call
+        return end_session_call, sync_tool_calls, async_tool_calls, wait_for_all_finished_requested
 
     @staticmethod
     def extract_text_before_end_session(response: str) -> str:
@@ -376,15 +391,6 @@ class ConversationManager:
         )
         self.add_system_message(warning_msg)
 
-    def add_tasks_launched_with_wait_option(self, task_ids: List[str]) -> None:
-        """Add notification about launched tasks with wait_for_async_answers option."""
-        task_list = self.prompts.format_task_list(task_ids)
-        notification_msg = self.prompts.get_runtime_message(
-            'tasks_launched_with_wait_option',
-            task_count=len(task_ids),
-            task_list=task_list
-        )
-        self.add_system_message(notification_msg)
 
     def add_all_tasks_completed(self, results: List[Tuple[str, str]]) -> None:
         """Add all task results as a single batch message."""
@@ -513,7 +519,7 @@ class AgentOrchestrator:
                 valid_tool_calls.append(tool_call)
 
         # Categorize valid tool calls
-        end_session_call, sync_calls, async_calls, wait_for_async_call = self.tool_handler.categorize_tool_calls(valid_tool_calls)
+        end_session_call, sync_calls, async_calls, wait_for_all_finished_requested = self.tool_handler.categorize_tool_calls(valid_tool_calls)
 
         # Add assistant message
         self.conversation.add_assistant_message(response)
@@ -531,13 +537,35 @@ class AgentOrchestrator:
         if end_session_call:
             return await self._handle_end_session(end_session_call, response, launched_task_ids)
 
-        # Handle wait_for_async_answers
-        if wait_for_async_call:
-            return await self._handle_wait_for_async(response, launched_task_ids, sync_calls)
+        # Handle wait_for_all_finished request
+        if wait_for_all_finished_requested:
+            # Notify about any newly launched tasks
+            if launched_task_ids:
+                self.conversation.add_tasks_launched_notification(launched_task_ids)
 
-        # Notify about launched tasks (with wait option info)
+            has_outstanding = await self.task_manager.has_outstanding_tasks()
+
+            if has_outstanding:
+                self._waiting_for_all_results = True
+                self.conversation.add_system_message(
+                    self.agent.prompts.get_runtime_message('wait_for_async_acknowledged')
+                )
+                self.agent.db.update_agent_state(self.agent.agent_id, 'waiting')
+                return response, False, False
+            else:
+                # No outstanding tasks - treat as no-op
+                self.conversation.add_system_message(
+                    self.agent.prompts.get_runtime_message('wait_for_async_no_tasks')
+                )
+                # Continue only if there were sync results to react to
+                should_continue = bool(sync_calls)
+                if should_continue:
+                    self.agent.db.update_agent_state(self.agent.agent_id, 'generating')
+                return response, should_continue, False
+
+        # Notify about launched tasks (standard mode)
         if launched_task_ids:
-            self.conversation.add_tasks_launched_with_wait_option(launched_task_ids)
+            self.conversation.add_tasks_launched_notification(launched_task_ids)
 
         # Determine if should continue
         should_continue = self._should_continue_generating(sync_calls, async_calls)
@@ -674,47 +702,6 @@ class AgentOrchestrator:
 
         return final_response, False, True
 
-    async def _handle_wait_for_async(
-        self,
-        response: str,
-        launched_task_ids: List[str],
-        sync_calls: List[Dict[str, Any]]
-    ) -> Tuple[str, bool, bool]:
-        """
-        Handle wait_for_async_answers tool call.
-        Sets batch-wait mode so all async results are collected and delivered at once.
-
-        Args:
-            response: LLM response
-            launched_task_ids: Task IDs launched in this turn
-            sync_calls: Sync calls executed in this turn
-
-        Returns:
-            Tuple of (response, should_continue, session_ended)
-        """
-        # Notify about any newly launched tasks
-        if launched_task_ids:
-            self.conversation.add_tasks_launched_notification(launched_task_ids)
-
-        has_outstanding = await self.task_manager.has_outstanding_tasks()
-
-        if has_outstanding:
-            self._waiting_for_all_results = True
-            self.conversation.add_system_message(
-                self.agent.prompts.get_runtime_message('wait_for_async_acknowledged')
-            )
-            self.agent.db.update_agent_state(self.agent.agent_id, 'waiting')
-            return response, False, False
-        else:
-            # No outstanding tasks - treat as no-op
-            self.conversation.add_system_message(
-                self.agent.prompts.get_runtime_message('wait_for_async_no_tasks')
-            )
-            # Continue only if there were sync results to react to
-            should_continue = bool(sync_calls)
-            if should_continue:
-                self.agent.db.update_agent_state(self.agent.agent_id, 'generating')
-            return response, should_continue, False
 
     async def collect_and_deliver_all_results(self, session_ended: bool) -> bool:
         """

@@ -23,7 +23,7 @@ const groupedTools = computed(() => {
 </script>
 
 <template>
-  <div class="tools-sidebar">
+  <div class="tools-sidebar" :class="{ 'is-collapsed': collapsed }">
     <div class="sidebar-header" @click="collapsed = !collapsed">
       <h3 v-tooltip.bottom="'Drag tools onto agent nodes in the graph to assign them.'">Tools</h3>
       <i class="pi collapse-icon" :class="collapsed ? 'pi-chevron-down' : 'pi-chevron-up'" />
@@ -51,7 +51,6 @@ const groupedTools = computed(() => {
 .tools-sidebar {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
   min-height: 0;
   flex: 1;
 }
@@ -62,17 +61,27 @@ const groupedTools = computed(() => {
   align-items: center;
   cursor: pointer;
   user-select: none;
+  transition: padding 0.15s ease, margin 0.15s ease;
+}
+
+.tools-sidebar:not(.is-collapsed) .sidebar-header {
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.25rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 .sidebar-header h3 {
   margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .collapse-icon {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: var(--p-text-color);
+  opacity: 0.7;
 }
 
 .tool-list {
@@ -82,6 +91,7 @@ const groupedTools = computed(() => {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  padding-top: 0.5rem;
 }
 
 .tool-group {

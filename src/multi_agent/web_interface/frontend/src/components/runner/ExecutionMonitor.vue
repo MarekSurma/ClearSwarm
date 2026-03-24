@@ -7,6 +7,7 @@ import TabPanels from 'primevue/tabpanels'
 import TabPanel from 'primevue/tabpanel'
 import Button from 'primevue/button'
 import Message from 'primevue/message'
+import Badge from 'primevue/badge'
 import { useToast } from 'primevue/usetoast'
 import type { AgentExecution } from '@/types/execution'
 import { useApi } from '@/composables/useApi'
@@ -64,8 +65,24 @@ async function stopAll() {
 
     <Tabs v-model:value="activeTab">
       <TabList>
-        <Tab value="roots">All</Tab>
-        <Tab value="running">Running</Tab>
+        <Tab value="roots">
+          <div class="tab-label">
+            <i class="pi pi-list"></i>
+            <span>All</span>
+            <Badge :value="rootExecutions.length" severity="secondary" size="small"></Badge>
+          </div>
+        </Tab>
+        <Tab value="running">
+          <div class="tab-label">
+            <i class="pi pi-play" :class="{ 'pi-spin': runningExecutions.length > 0 }"></i>
+            <span>Running</span>
+            <Badge
+              :value="runningExecutions.length"
+              :severity="runningExecutions.length > 0 ? 'success' : 'secondary'"
+              size="small"
+            ></Badge>
+          </div>
+        </Tab>
       </TabList>
       <TabPanels>
         <TabPanel value="roots">
@@ -119,6 +136,12 @@ async function stopAll() {
 .monitor-actions {
   display: flex;
   justify-content: flex-end;
+}
+
+.tab-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .execution-list {

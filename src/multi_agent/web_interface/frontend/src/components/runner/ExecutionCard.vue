@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import Tag from 'primevue/tag'
 import Button from 'primevue/button'
+import Dialog from 'primevue/dialog'
 import type { AgentExecution } from '@/types/execution'
 import { toDisplayName } from '@/utils/nameFormatting'
 
@@ -12,6 +13,9 @@ const props = defineProps<{
 const emit = defineEmits<{
   viewGraph: [agentId: string]
 }>()
+
+const showQuestionModal = ref(false)
+const showAnswerModal = ref(false)
 
 function calculateDuration(start: string, end: string | null): string {
   if (!end) return 'Running...'
@@ -29,6 +33,16 @@ const duration = computed(() => calculateDuration(props.execution.started_at, pr
 const shortId = computed(() => props.execution.agent_id.substring(0, 8))
 const statusSeverity = computed(() => (props.execution.is_running ? 'warn' : 'success'))
 const statusLabel = computed(() => (props.execution.is_running ? 'Running' : 'Completed'))
+
+const truncatedQuestion = computed(() => {
+  const q = props.execution.question || ''
+  return q.length > 200 ? q.substring(0, 200) + '...' : q
+})
+
+const truncatedAnswer = computed(() => {
+  const a = props.execution.final_response || ''
+  return a.length > 200 ? a.substring(0, 200) + '...' : a
+})
 </script>
 
 <template>
@@ -46,27 +60,63 @@ const statusLabel = computed(() => (props.execution.is_running ? 'Running' : 'Co
     <div class="card-meta">
       <span>{{ startedAt }}</span>
       <span>{{ duration }}</span>
-      <span class="mono">{{ shortId }}...</span>
+      <span class="mono">{{ shortId }}</span>
     </div>
 
     <div class="card-actions">
       <Button
-        label="View Graph"
+        label="Graph"
         icon="pi pi-sitemap"
         size="small"
         text
         @click="emit('viewGraph', execution.agent_id)"
       />
+      <div class="qa-badges" v-if="execution.question || execution.final_response">
+        <Tag
+          v-if="execution.question"
+          severity="info"
+          class="clickable-tag"
+          v-tooltip.bottom="truncatedQuestion"
+          @click="showQuestionModal = true"
+        >
+          <template #default>
+            <i class="pi pi-question-circle" style="font-size: 0.8rem; margin-right: 0.25rem"></i>
+            Question
+          </template>
+        </Tag>
+        <Tag
+          v-if="execution.final_response"
+          severity="secondary"
+          class="clickable-tag"
+          v-tooltip.bottom="truncatedAnswer"
+          @click="showAnswerModal = true"
+        >
+          <template #default>
+            <i class="pi pi-check-circle" style="font-size: 0.8rem; margin-right: 0.25rem"></i>
+            Answer
+          </template>
+        </Tag>
+      </div>
     </div>
+
+    <!-- Modals -->
+    <Dialog v-model:visible="showQuestionModal" header="Question" modal :style="{ width: '60vw' }">
+      <pre class="full-text">{{ execution.question }}</pre>
+    </Dialog>
+
+    <Dialog v-model:visible="showAnswerModal" header="Answer" modal :style="{ width: '60vw' }">
+      <pre class="full-text">{{ execution.final_response }}</pre>
+    </Dialog>
   </div>
 </template>
 
 <style scoped>
 .execution-card {
-  padding: 0.875rem;
+  padding: 0.75rem 0.875rem;
   border: 1px solid var(--p-surface-200);
   border-radius: 8px;
   transition: border-color 0.15s ease;
+  background: var(--p-surface-0);
 }
 
 .execution-card.running {
@@ -77,29 +127,34 @@ const statusLabel = computed(() => (props.execution.is_running ? 'Running' : 'Co
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
 }
 
 .card-title {
   display: flex;
   align-items: baseline;
   gap: 0.5rem;
+  overflow: hidden;
 }
 
 .agent-name {
   font-weight: 600;
   font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .parent-label {
   color: var(--p-text-muted-color);
-  font-size: 0.8rem;
+  font-size: 0.75rem;
+  white-space: nowrap;
 }
 
 .card-meta {
   display: flex;
-  gap: 1rem;
-  font-size: 0.8rem;
+  gap: 0.75rem;
+  font-size: 0.75rem;
   color: var(--p-text-muted-color);
   margin-bottom: 0.5rem;
 }
@@ -110,6 +165,36 @@ const statusLabel = computed(() => (props.execution.is_running ? 'Running' : 'Co
 
 .card-actions {
   display: flex;
-  gap: 0.25rem;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  border-top: 1px solid var(--p-surface-100);
+  padding-top: 0.5rem;
+}
+
+.qa-badges {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.clickable-tag {
+  cursor: pointer;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.75rem;
+  height: 1.5rem;
+  display: flex;
+  align-items: center;
+}
+
+.full-text {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  background: var(--p-surface-50);
+  padding: 1rem;
+  border-radius: 4px;
+  font-family: inherit;
+  margin: 0;
+  max-height: 60vh;
+  overflow-y: auto;
 }
 </style>

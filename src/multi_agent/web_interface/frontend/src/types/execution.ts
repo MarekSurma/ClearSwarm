@@ -9,6 +9,8 @@ export interface AgentExecution {
   call_mode: string
   is_running: boolean
   log_file: string | null
+  question?: string | null
+  final_response?: string | null
 }
 
 export interface ToolExecution {

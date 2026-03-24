@@ -221,6 +221,9 @@ class Agent:
         Returns:
             Final response from agent
         """
+        # Save question to database
+        self.db.update_agent_question(self.agent_id, user_message)
+
         # Initialize orchestrator
         orchestrator = AgentOrchestrator(self)
 
@@ -287,7 +290,7 @@ class Agent:
 
         finally:
             # Mark agent as completed in database
-            self.db.complete_agent_execution(self.agent_id)
+            self.db.complete_agent_execution(self.agent_id, final_response)
 
             # Save final log
             self.interaction_log["completed_at"] = datetime.now().isoformat()

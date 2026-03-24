@@ -437,9 +437,11 @@ async function handleDeleteAgent(agentName: string) {
 }
 
 .floating-card :deep(.p-card-content) {
-  overflow-y: auto;
+  overflow-y: hidden;
   flex: 1;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 @media (max-width: 768px) {
