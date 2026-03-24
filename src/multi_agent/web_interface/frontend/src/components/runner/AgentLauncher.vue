@@ -3,6 +3,8 @@ import { ref, computed } from 'vue'
 import Select from 'primevue/select'
 import Textarea from 'primevue/textarea'
 import Button from 'primevue/button'
+import Fluid from 'primevue/fluid'
+import FloatLabel from 'primevue/floatlabel'
 import { useToast } from 'primevue/usetoast'
 import type { AgentInfo } from '@/types/agent'
 import { useApi } from '@/composables/useApi'
@@ -62,79 +64,53 @@ async function launchAgent() {
 </script>
 
 <template>
-  <div class="agent-launcher">
-    <h3>Launch Agent</h3>
-
-    <div class="field">
-      <label for="agent-select">Agent</label>
-      <Select
-        id="agent-select"
-        v-model="selectedAgent"
-        :options="agentOptions"
-        optionLabel="label"
-        optionValue="value"
-        placeholder="Select an agent..."
-        class="w-full"
-      />
+  <Fluid>
+    <div class="launcher-fields">
+      <FloatLabel variant="on">
+        <Select
+          id="agent-select"
+          v-model="selectedAgent"
+          :options="agentOptions"
+          optionLabel="label"
+          optionValue="value"
+        />
+        <label for="agent-select">Agent</label>
+      </FloatLabel>
       <small v-if="selectedAgentDescription" class="agent-desc">
         {{ selectedAgentDescription }}
       </small>
-    </div>
 
-    <div class="field">
-      <label for="message-input">Message</label>
-      <Textarea
-        id="message-input"
-        v-model="message"
-        :rows="4"
-        placeholder="Enter your message for the agent..."
-        class="w-full"
-        @keydown.ctrl.enter="launchAgent"
+      <FloatLabel variant="on">
+        <Textarea
+          id="message-input"
+          v-model="message"
+          :rows="4"
+          @keydown.ctrl.enter="launchAgent"
+        />
+        <label for="message-input">Message</label>
+      </FloatLabel>
+
+      <Button
+        label="Launch Agent"
+        icon="pi pi-play"
+        :loading="launching"
+        :disabled="!selectedAgent || !message.trim()"
+        @click="launchAgent"
       />
     </div>
-
-    <Button
-      label="Launch Agent"
-      icon="pi pi-play"
-      :loading="launching"
-      :disabled="!selectedAgent || !message.trim()"
-      @click="launchAgent"
-      class="w-full"
-    />
-  </div>
+  </Fluid>
 </template>
 
 <style scoped>
-.agent-launcher {
+.launcher-fields {
   display: flex;
   flex-direction: column;
   gap: 1rem;
 }
 
-.agent-launcher h3 {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-}
-
-.field label {
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: var(--p-text-muted-color);
-}
-
 .agent-desc {
   color: var(--p-text-muted-color);
   font-style: italic;
-}
-
-.w-full {
-  width: 100%;
+  margin-top: -0.5rem;
 }
 </style>

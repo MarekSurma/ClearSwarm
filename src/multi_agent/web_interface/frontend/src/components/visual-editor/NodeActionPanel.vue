@@ -207,7 +207,7 @@ function handleRemoveFromParent(parentName: string) {
   right: 20px;
   width: 320px;
   z-index: 100;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--p-surface-900), transparent 70%);
 }
 
 .panel-header {

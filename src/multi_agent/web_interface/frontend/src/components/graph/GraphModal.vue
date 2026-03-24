@@ -139,7 +139,6 @@ function close() {
 .graph-container {
   flex: 7;
   min-height: 400px;
-  background: rgb(61, 148, 181);
 }
 
 </style>

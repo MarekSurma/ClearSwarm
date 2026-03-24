@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
+import Card from 'primevue/card'
 import type { AgentDetail, ToolInfo } from '@/types/agent'
 import { useAgents } from '@/composables/useAgents'
 import { useApi } from '@/composables/useApi'
@@ -325,24 +326,28 @@ async function handleDeleteAgent(agentName: string) {
 
       <!-- Floating left: Agent list -->
       <aside class="left-panel">
-        <div class="panel">
-          <AgentEditorSidebar
-            :agents="agents"
-            :selectedName="selectedAgentName"
-            :hoveredName="hoveredGraphAgentName"
-            @select="selectAgent"
-            @new="handleNewAgent"
-            @delete="handleDeleteAgent"
-            @clone="handleCloneAgent"
-          />
-        </div>
+        <Card class="floating-card">
+          <template #content>
+            <AgentEditorSidebar
+              :agents="agents"
+              :selectedName="selectedAgentName"
+              :hoveredName="hoveredGraphAgentName"
+              @select="selectAgent"
+              @new="handleNewAgent"
+              @delete="handleDeleteAgent"
+              @clone="handleCloneAgent"
+            />
+          </template>
+        </Card>
       </aside>
 
       <!-- Floating right: Tools list -->
       <aside class="right-panel">
-        <div class="panel">
-          <ToolsSidebar :tools="tools" />
-        </div>
+        <Card class="floating-card">
+          <template #content>
+            <ToolsSidebar :tools="tools" />
+          </template>
+        </Card>
       </aside>
     </div>
 
@@ -417,16 +422,24 @@ async function handleDeleteAgent(agentName: string) {
   overflow: hidden;
 }
 
-.panel {
-  border: 1px solid var(--p-surface-200);
-  border-radius: 10px;
-  padding: 1rem;
+.floating-card {
   max-height: 100%;
   overflow: hidden;
+  background: #aee9ff;
+}
+
+.floating-card :deep(.p-card-body) {
   display: flex;
   flex-direction: column;
-  background: #aee9ff;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  height: 100%;
+  padding: 1rem;
+}
+
+.floating-card :deep(.p-card-content) {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 @media (max-width: 768px) {

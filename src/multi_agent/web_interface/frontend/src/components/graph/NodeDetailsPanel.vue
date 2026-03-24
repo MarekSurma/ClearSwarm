@@ -49,12 +49,12 @@ function formatXmlContent(text: string): string {
 
 function getRoleStyle(role: string) {
   const styles: Record<string, { icon: string; color: string }> = {
-    user: { icon: 'pi-user', color: '#3b82f6' },
-    assistant: { icon: 'pi-android', color: '#10b981' },
-    system: { icon: 'pi-cog', color: '#f59e0b' },
-    tool: { icon: 'pi-wrench', color: '#8b5cf6' },
+    user: { icon: 'pi-user', color: 'var(--p-blue-500)' },
+    assistant: { icon: 'pi-android', color: 'var(--p-green-500)' },
+    system: { icon: 'pi-cog', color: 'var(--p-amber-500)' },
+    tool: { icon: 'pi-wrench', color: 'var(--p-violet-500)' },
   }
-  return styles[role] || { icon: 'pi-comment', color: '#94a3b8' }
+  return styles[role] || { icon: 'pi-comment', color: 'var(--p-surface-400)' }
 }
 </script>
 

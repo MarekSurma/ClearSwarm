@@ -461,7 +461,7 @@ onUnmounted(() => {
 .pulsing-dot {
   width: 8px;
   height: 8px;
-  background-color: white;
+  background-color: var(--p-primary-contrast-color);
   border-radius: 50%;
   animation: pulse 1.5s ease-in-out infinite;
 }

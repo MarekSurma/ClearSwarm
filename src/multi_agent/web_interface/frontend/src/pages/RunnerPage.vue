@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch } from 'vue'
+import Card from 'primevue/card'
 import ConnectionStatus from '@/components/runner/ConnectionStatus.vue'
 import AgentLauncher from '@/components/runner/AgentLauncher.vue'
-import AgentCard from '@/components/runner/AgentCard.vue'
+
 import ExecutionMonitor from '@/components/runner/ExecutionMonitor.vue'
 import GraphModal from '@/components/graph/GraphModal.vue'
 import { useAgents } from '@/composables/useAgents'
@@ -61,29 +62,29 @@ function onLaunched() {
     <div class="runner-layout">
       <!-- Left Panel -->
       <aside class="left-panel">
-        <div class="panel">
-          <AgentLauncher :agents="agents" @launched="onLaunched" />
-        </div>
-        <div class="panel">
-          <h3 class="panel-title">Available Agents</h3>
-          <div class="agents-grid">
-            <AgentCard v-for="agent in agents" :key="agent.name" :agent="agent" />
-            <p v-if="agents.length === 0" class="empty-text">No agents available</p>
-          </div>
-        </div>
+        <Card>
+          <template #title>Launch Agent</template>
+          <template #content>
+            <AgentLauncher :agents="agents" @launched="onLaunched" />
+          </template>
+        </Card>
+
       </aside>
 
       <!-- Right Panel -->
       <main class="right-panel">
-        <div class="panel">
-          <ExecutionMonitor
-            :executions="executions"
-            :rootExecutions="rootExecutions"
-            :runningExecutions="runningExecutions"
-            @view-graph="openGraph"
-            @stopped="loadExecutions"
-          />
-        </div>
+        <Card>
+          <template #title>Execution Monitor</template>
+          <template #content>
+            <ExecutionMonitor
+              :executions="executions"
+              :rootExecutions="rootExecutions"
+              :runningExecutions="runningExecutions"
+              @view-graph="openGraph"
+              @stopped="loadExecutions"
+            />
+          </template>
+        </Card>
       </main>
     </div>
 
@@ -132,31 +133,6 @@ function onLaunched() {
   gap: 1rem;
 }
 
-.panel {
-  border: 1px solid var(--p-surface-200);
-  border-radius: 10px;
-  padding: 1.25rem;
-}
-
-.panel-title {
-  margin: 0 0 0.75rem 0;
-  font-size: 1rem;
-  font-weight: 600;
-}
-
-.agents-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-.empty-text {
-  color: var(--p-text-muted-color);
-  text-align: center;
-  padding: 1rem;
-}
 
 @media (max-width: 900px) {
   .runner-layout {

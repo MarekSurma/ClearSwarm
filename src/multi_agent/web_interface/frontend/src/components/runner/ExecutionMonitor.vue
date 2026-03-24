@@ -6,6 +6,7 @@ import Tab from 'primevue/tab'
 import TabPanels from 'primevue/tabpanels'
 import TabPanel from 'primevue/tabpanel'
 import Button from 'primevue/button'
+import Message from 'primevue/message'
 import { useToast } from 'primevue/usetoast'
 import type { AgentExecution } from '@/types/execution'
 import { useApi } from '@/composables/useApi'
@@ -50,8 +51,7 @@ async function stopAll() {
 
 <template>
   <div class="execution-monitor">
-    <div class="monitor-header">
-      <h3>Execution Monitor</h3>
+    <div class="monitor-actions">
       <Button
         label="Stop All"
         icon="pi pi-stop"
@@ -77,11 +77,13 @@ async function stopAll() {
                 :execution="exec"
                 @view-graph="emit('viewGraph', $event)"
               />
-              <p v-if="hiddenRootCount > 0" class="overflow-text">
+              <Message v-if="hiddenRootCount > 0" severity="secondary" :closable="false">
                 + {{ hiddenRootCount }} more ({{ rootExecutions.length }} total)
-              </p>
+              </Message>
             </template>
-            <p v-else class="empty-text">No executions found</p>
+            <Message v-else severity="secondary" :closable="false" icon="pi pi-inbox">
+              No executions found
+            </Message>
           </div>
         </TabPanel>
         <TabPanel value="running">
@@ -93,11 +95,13 @@ async function stopAll() {
                 :execution="exec"
                 @view-graph="emit('viewGraph', $event)"
               />
-              <p v-if="hiddenRunningCount > 0" class="overflow-text">
+              <Message v-if="hiddenRunningCount > 0" severity="secondary" :closable="false">
                 + {{ hiddenRunningCount }} more ({{ runningExecutions.length }} total)
-              </p>
+              </Message>
             </template>
-            <p v-else class="empty-text">No running agents</p>
+            <Message v-else severity="secondary" :closable="false" icon="pi pi-inbox">
+              No running agents
+            </Message>
           </div>
         </TabPanel>
       </TabPanels>
@@ -112,16 +116,9 @@ async function stopAll() {
   gap: 1rem;
 }
 
-.monitor-header {
+.monitor-actions {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.monitor-header h3 {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
+  justify-content: flex-end;
 }
 
 .execution-list {
@@ -131,18 +128,5 @@ async function stopAll() {
   max-height: 70vh;
   overflow-y: auto;
   padding-top: 0.5rem;
-}
-
-.empty-text {
-  color: var(--p-text-muted-color);
-  text-align: center;
-  padding: 2rem;
-}
-
-.overflow-text {
-  color: var(--p-text-muted-color);
-  text-align: center;
-  padding: 0.75rem;
-  font-size: 0.85rem;
 }
 </style>

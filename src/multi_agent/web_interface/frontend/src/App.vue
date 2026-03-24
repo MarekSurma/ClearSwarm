@@ -58,23 +58,23 @@ body {
   margin: 0 auto;
 }
 
-/* Scrollbar styling */
+/* Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--p-surface-100);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--p-surface-400);
-  border-radius: 4px;
+  background: var(--p-surface-200);
+  border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--p-surface-500);
+  background: var(--p-surface-300);
 }
 
 /* Utility for monospace text */

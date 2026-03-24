@@ -33,13 +33,13 @@ defineProps<{
 }
 
 .status-dot.online {
-  background: #22c55e;
-  box-shadow: 0 0 6px rgba(34, 197, 94, 0.5);
+  background: var(--p-green-500);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--p-green-500), transparent 50%);
 }
 
 .status-dot.offline {
-  background: #ef4444;
-  box-shadow: 0 0 6px rgba(239, 68, 68, 0.5);
+  background: var(--p-red-500);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--p-red-500), transparent 50%);
 }
 
 .separator {

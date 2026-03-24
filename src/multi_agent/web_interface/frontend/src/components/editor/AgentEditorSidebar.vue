@@ -163,7 +163,7 @@ function submitClone(agentName: string) {
 
 .collapse-icon {
   font-size: 0.75rem;
-  color: #000;
+  color: var(--p-text-color);
   cursor: pointer;
 }
 
@@ -245,12 +245,12 @@ function submitClone(agentName: string) {
 }
 
 .icon-btn--danger {
-  color: #c03030;
+  color: var(--p-red-600);
   opacity: 1;
 }
 
 .icon-btn--success {
-  color: #2e7d32;
+  color: var(--p-green-600);
 }
 
 .icon-btn--disabled {

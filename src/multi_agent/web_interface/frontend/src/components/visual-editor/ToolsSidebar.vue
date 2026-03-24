@@ -72,7 +72,7 @@ const groupedTools = computed(() => {
 
 .collapse-icon {
   font-size: 0.75rem;
-  color: #000;
+  color: var(--p-text-color);
 }
 
 .tool-list {
@@ -94,7 +94,7 @@ const groupedTools = computed(() => {
   font-size: 0.7rem;
   font-weight: 600;
   text-transform: uppercase;
-  color: #000;
+  color: var(--p-text-color);
   padding: 0.15rem 0.5rem;
   letter-spacing: 0.03em;
   text-align: center;

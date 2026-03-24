@@ -1,223 +1,7 @@
-<template>
-  <div class="action-plan-page">
-    <div class="header">
-      <h1>Action Plans</h1>
-      <Button label="New Plan" icon="pi pi-plus" @click="openCreateDialog" />
-    </div>
-
-    <!-- Empty State -->
-    <div v-if="schedules.length === 0 && !loading" class="empty-state">
-      <i class="pi pi-clock" style="font-size: 3rem; opacity: 0.3"></i>
-      <p>No action plans yet</p>
-      <Button label="Create First Plan" @click="openCreateDialog" />
-    </div>
-
-    <!-- Schedules Table -->
-    <DataTable
-      v-else
-      :value="schedules"
-      size="small"
-      stripedRows
-      :loading="loading"
-      class="schedules-table"
-    >
-      <Column field="name" header="Name" sortable>
-        <template #body="{ data }">
-          <span
-            v-tooltip.top="data.name.length > 30 ? data.name : null"
-            class="truncate-text"
-            style="max-width: 200px"
-          >
-            {{ data.name }}
-          </span>
-        </template>
-      </Column>
-
-      <Column field="agent_name" header="Agent" sortable>
-        <template #body="{ data }">
-          <span
-            v-tooltip.top="data.agent_name.length > 20 ? data.agent_name : null"
-            class="truncate-text"
-            style="max-width: 150px"
-          >
-            {{ toDisplayName(data.agent_name) }}
-          </span>
-        </template>
-      </Column>
-
-      <Column field="message" header="Message" sortable>
-        <template #body="{ data }">
-          <span
-            v-tooltip.top="data.message && data.message.length > 40 ? data.message : null"
-            class="truncate-text"
-            style="max-width: 300px"
-          >
-            {{ data.message || '-' }}
-          </span>
-        </template>
-      </Column>
-
-      <Column field="interval_value" header="Frequency" sortable>
-        <template #body="{ data }">
-          {{ formatFrequency(data) }}
-        </template>
-      </Column>
-
-      <Column field="next_run_at" header="Next Run" sortable>
-        <template #body="{ data }">
-          {{ data.next_run_at ? formatDateTime(data.next_run_at) : '-' }}
-        </template>
-      </Column>
-
-      <Column field="last_run_at" header="Last Run" sortable>
-        <template #body="{ data }">
-          {{ data.last_run_at ? formatDateTime(data.last_run_at) : '-' }}
-        </template>
-      </Column>
-
-      <Column field="enabled" header="Status" sortable>
-        <template #body="{ data }">
-          <Tag
-            :value="data.enabled ? 'Enabled' : 'Disabled'"
-            :severity="data.enabled ? 'success' : 'secondary'"
-          />
-        </template>
-      </Column>
-
-      <Column header="Actions" style="width: 180px">
-        <template #body="{ data }">
-          <div style="display: flex; align-items: center; gap: 0.5rem">
-            <ToggleSwitch
-              v-model="data.enabled"
-              @change="toggleSchedule(data)"
-            />
-            <Button
-              icon="pi pi-pencil"
-              severity="secondary"
-              text
-              size="small"
-              @click="openEditDialog(data)"
-            />
-            <Button
-              icon="pi pi-trash"
-              severity="danger"
-              text
-              size="small"
-              @click="confirmDelete(data)"
-            />
-          </div>
-        </template>
-      </Column>
-    </DataTable>
-
-    <!-- Create/Edit Dialog -->
-    <Dialog
-      v-model:visible="showDialog"
-      :header="editingSchedule ? 'Edit Plan' : 'New Plan'"
-      modal
-      :style="{ width: '500px' }"
-    >
-      <div class="dialog-content">
-        <div class="field">
-          <label for="plan-name">Plan Name *</label>
-          <InputText
-            id="plan-name"
-            v-model="formData.name"
-            placeholder="e.g., Daily report"
-            fluid
-          />
-        </div>
-
-        <div class="field">
-          <label for="agent">Agent *</label>
-          <Select
-            id="agent"
-            v-model="formData.agent_name"
-            :options="agentOptions"
-            option-label="label"
-            option-value="value"
-            placeholder="Select agent"
-            fluid
-          />
-        </div>
-
-        <div class="field">
-          <label for="message">Message</label>
-          <Textarea
-            id="message"
-            v-model="formData.message"
-            placeholder="Optional message for the agent"
-            rows="3"
-            fluid
-          />
-        </div>
-
-        <div class="field-group">
-          <div class="field">
-            <label for="interval">Run every *</label>
-            <InputNumber
-              id="interval"
-              v-model="formData.interval_value"
-              :min="1"
-              placeholder="1"
-              fluid
-            />
-          </div>
-          <div class="field">
-            <label for="schedule-type">Period *</label>
-            <Select
-              id="schedule-type"
-              v-model="formData.schedule_type"
-              :options="scheduleTypeOptions"
-              option-label="label"
-              option-value="value"
-              fluid
-            />
-          </div>
-        </div>
-
-        <div class="field">
-          <label for="start-from">Starting from (optional)</label>
-          <InputText
-            id="start-from"
-            v-model="formData.start_from"
-            type="datetime-local"
-            fluid
-          />
-        </div>
-      </div>
-
-      <template #footer>
-        <Button label="Cancel" severity="secondary" @click="showDialog = false" />
-        <Button
-          :label="editingSchedule ? 'Update' : 'Create'"
-          @click="saveSchedule"
-          :disabled="!isFormValid"
-        />
-      </template>
-    </Dialog>
-
-    <!-- Delete Confirmation Dialog -->
-    <Dialog
-      v-model:visible="showDeleteDialog"
-      header="Delete Plan"
-      modal
-      :style="{ width: '400px' }"
-    >
-      <p>Are you sure you want to delete "{{ scheduleToDelete?.name }}"?</p>
-      <template #footer>
-        <Button label="Cancel" severity="secondary" @click="showDeleteDialog = false" />
-        <Button label="Delete" severity="danger" @click="deleteSchedule" />
-      </template>
-    </Dialog>
-
-    <Toast />
-  </div>
-</template>
-
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useToast } from 'primevue/usetoast'
+import Card from 'primevue/card'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
@@ -229,6 +13,9 @@ import ToggleSwitch from 'primevue/toggleswitch'
 import Toast from 'primevue/toast'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
+import Message from 'primevue/message'
+import FloatLabel from 'primevue/floatlabel'
+import Fluid from 'primevue/fluid'
 
 import { useSchedules } from '@/composables/useSchedules'
 import { useAgents } from '@/composables/useAgents'
@@ -348,7 +135,6 @@ async function toggleSchedule(schedule: ScheduleInfo) {
     await loadSchedules()
   } catch (error: any) {
     toast.add({ severity: 'error', summary: 'Error', detail: error.message, life: 5000 })
-    // Revert the toggle on error
     schedule.enabled = !schedule.enabled
   }
 }
@@ -369,24 +155,247 @@ onMounted(async () => {
 })
 </script>
 
+<template>
+  <div class="action-plan-page">
+    <header class="page-header">
+      <div>
+        <h1>Action Plans</h1>
+        <p class="subtitle">Schedule recurring agent tasks</p>
+      </div>
+      <Button label="New Plan" icon="pi pi-plus" @click="openCreateDialog" />
+    </header>
+
+    <!-- Empty State -->
+    <Card v-if="schedules.length === 0 && !loading">
+      <template #content>
+        <div class="empty-state">
+          <i class="pi pi-clock" style="font-size: 3rem; opacity: 0.3"></i>
+          <p>No action plans yet</p>
+          <Button label="Create First Plan" @click="openCreateDialog" />
+        </div>
+      </template>
+    </Card>
+
+    <!-- Schedules Table -->
+    <Card v-else>
+      <template #content>
+        <DataTable
+          :value="schedules"
+          size="small"
+          stripedRows
+          :loading="loading"
+        >
+          <Column field="name" header="Name" sortable>
+            <template #body="{ data }">
+              <span
+                v-tooltip.top="data.name.length > 30 ? data.name : null"
+                class="truncate-text"
+                style="max-width: 200px"
+              >
+                {{ data.name }}
+              </span>
+            </template>
+          </Column>
+
+          <Column field="agent_name" header="Agent" sortable>
+            <template #body="{ data }">
+              <span
+                v-tooltip.top="data.agent_name.length > 20 ? data.agent_name : null"
+                class="truncate-text"
+                style="max-width: 150px"
+              >
+                {{ toDisplayName(data.agent_name) }}
+              </span>
+            </template>
+          </Column>
+
+          <Column field="message" header="Message" sortable>
+            <template #body="{ data }">
+              <span
+                v-tooltip.top="data.message && data.message.length > 40 ? data.message : null"
+                class="truncate-text"
+                style="max-width: 300px"
+              >
+                {{ data.message || '-' }}
+              </span>
+            </template>
+          </Column>
+
+          <Column field="interval_value" header="Frequency" sortable>
+            <template #body="{ data }">
+              {{ formatFrequency(data) }}
+            </template>
+          </Column>
+
+          <Column field="next_run_at" header="Next Run" sortable>
+            <template #body="{ data }">
+              {{ data.next_run_at ? formatDateTime(data.next_run_at) : '-' }}
+            </template>
+          </Column>
+
+          <Column field="last_run_at" header="Last Run" sortable>
+            <template #body="{ data }">
+              {{ data.last_run_at ? formatDateTime(data.last_run_at) : '-' }}
+            </template>
+          </Column>
+
+          <Column field="enabled" header="Status" sortable>
+            <template #body="{ data }">
+              <Tag
+                :value="data.enabled ? 'Enabled' : 'Disabled'"
+                :severity="data.enabled ? 'success' : 'secondary'"
+              />
+            </template>
+          </Column>
+
+          <Column header="Actions" style="width: 180px">
+            <template #body="{ data }">
+              <div style="display: flex; align-items: center; gap: 0.5rem">
+                <ToggleSwitch
+                  v-model="data.enabled"
+                  @change="toggleSchedule(data)"
+                />
+                <Button
+                  icon="pi pi-pencil"
+                  severity="secondary"
+                  text
+                  size="small"
+                  @click="openEditDialog(data)"
+                />
+                <Button
+                  icon="pi pi-trash"
+                  severity="danger"
+                  text
+                  size="small"
+                  @click="confirmDelete(data)"
+                />
+              </div>
+            </template>
+          </Column>
+        </DataTable>
+      </template>
+    </Card>
+
+    <!-- Create/Edit Dialog -->
+    <Dialog
+      v-model:visible="showDialog"
+      :header="editingSchedule ? 'Edit Plan' : 'New Plan'"
+      modal
+      :style="{ width: '500px' }"
+    >
+      <Fluid>
+        <div class="dialog-fields">
+          <FloatLabel variant="on">
+            <InputText
+              id="plan-name"
+              v-model="formData.name"
+            />
+            <label for="plan-name">Plan Name *</label>
+          </FloatLabel>
+
+          <FloatLabel variant="on">
+            <Select
+              id="agent"
+              v-model="formData.agent_name"
+              :options="agentOptions"
+              option-label="label"
+              option-value="value"
+            />
+            <label for="agent">Agent *</label>
+          </FloatLabel>
+
+          <FloatLabel variant="on">
+            <Textarea
+              id="message"
+              v-model="formData.message"
+              rows="3"
+            />
+            <label for="message">Message</label>
+          </FloatLabel>
+
+          <div class="field-group">
+            <FloatLabel variant="on">
+              <InputNumber
+                id="interval"
+                v-model="formData.interval_value"
+                :min="1"
+              />
+              <label for="interval">Run every *</label>
+            </FloatLabel>
+            <FloatLabel variant="on">
+              <Select
+                id="schedule-type"
+                v-model="formData.schedule_type"
+                :options="scheduleTypeOptions"
+                option-label="label"
+                option-value="value"
+              />
+              <label for="schedule-type">Period *</label>
+            </FloatLabel>
+          </div>
+
+          <FloatLabel variant="on">
+            <InputText
+              id="start-from"
+              v-model="formData.start_from"
+              type="datetime-local"
+            />
+            <label for="start-from">Starting from (optional)</label>
+          </FloatLabel>
+        </div>
+      </Fluid>
+
+      <template #footer>
+        <Button label="Cancel" severity="secondary" @click="showDialog = false" />
+        <Button
+          :label="editingSchedule ? 'Update' : 'Create'"
+          @click="saveSchedule"
+          :disabled="!isFormValid"
+        />
+      </template>
+    </Dialog>
+
+    <!-- Delete Confirmation Dialog -->
+    <Dialog
+      v-model:visible="showDeleteDialog"
+      header="Delete Plan"
+      modal
+      :style="{ width: '400px' }"
+    >
+      <p>Are you sure you want to delete "{{ scheduleToDelete?.name }}"?</p>
+      <template #footer>
+        <Button label="Cancel" severity="secondary" @click="showDeleteDialog = false" />
+        <Button label="Delete" severity="danger" @click="deleteSchedule" />
+      </template>
+    </Dialog>
+
+    <Toast />
+  </div>
+</template>
+
 <style scoped>
 .action-plan-page {
-  padding: 2rem;
-  max-width: 1200px;
-  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
 }
 
-.header {
+.page-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 2rem;
+  align-items: flex-start;
 }
 
-.header h1 {
+.page-header h1 {
   margin: 0;
-  font-size: 2rem;
-  font-weight: 600;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.subtitle {
+  color: var(--p-text-muted-color);
+  font-size: 0.9rem;
+  margin-top: 0.25rem;
 }
 
 .empty-state {
@@ -394,14 +403,14 @@ onMounted(async () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 4rem 2rem;
+  padding: 3rem 2rem;
   text-align: center;
   gap: 1rem;
 }
 
 .empty-state p {
-  font-size: 1.2rem;
-  color: var(--text-color-secondary);
+  font-size: 1.1rem;
+  color: var(--p-text-muted-color);
   margin: 0;
 }
 
@@ -413,22 +422,11 @@ onMounted(async () => {
   vertical-align: middle;
 }
 
-.dialog-content {
+.dialog-fields {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
   padding: 1rem 0;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.field label {
-  font-weight: 500;
-  font-size: 0.95rem;
 }
 
 .field-group {

@@ -60,14 +60,14 @@ defineProps<{
 }
 
 .stat-value.running {
-  color: #f59e0b;
+  color: var(--p-amber-500);
 }
 
 .stat-value.completed {
-  color: #22c55e;
+  color: var(--p-green-500);
 }
 
 .stat-value.errors {
-  color: #ef4444;
+  color: var(--p-red-500);
 }
 </style>
