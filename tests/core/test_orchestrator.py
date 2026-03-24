@@ -124,13 +124,41 @@ class TestToolCallHandler:
         ]
 
         handler = ToolCallHandler()
-        end_session, sync_calls, async_calls, wait_for_async = handler.categorize_tool_calls(tool_calls)
+        end_session, sync_calls, async_calls, wait_requested = handler.categorize_tool_calls(tool_calls)
 
         assert end_session is not None
         assert end_session['tool_name'] == 'end_session'
         assert len(sync_calls) == 2
         assert len(async_calls) == 1
-        assert wait_for_async is None
+        assert wait_requested is False
+
+    def test_categorize_tool_calls_with_wait(self):
+        """Test categorizing tool calls with wait_for_all_finished flag."""
+        tool_calls = [
+            {'tool_name': 'analyzer', 'call_mode': 'asynchronous', 'wait_for_all_finished': True, 'parameters': {}},
+        ]
+
+        handler = ToolCallHandler()
+        _, _, _, wait_requested = handler.categorize_tool_calls(tool_calls)
+
+        assert wait_requested is True
+
+    def test_extract_all_tool_calls_with_wait(self):
+        """Test extracting tool calls with wait_for_all_finished tag."""
+        text = '''
+<tool_call>
+<tool_name>search</tool_name>
+<call_mode>asynchronous</call_mode>
+<wait_for_all_finished>true</wait_for_all_finished>
+<parameters>{"q": "test"}</parameters>
+</tool_call>
+'''
+        handler = ToolCallHandler()
+        calls = handler.extract_all_tool_calls(text)
+
+        assert len(calls) == 1
+        assert calls[0]['tool_name'] == 'search'
+        assert calls[0]['wait_for_all_finished'] is True
 
     def test_extract_text_before_end_session(self):
         """Test extracting text before end_session call."""
@@ -450,7 +478,7 @@ class TestAgentOrchestrator:
         assert should_continue is True
 
     async def test_should_continue_generating_with_async(self, mock_agent):
-        """Test continue logic with async calls - should continue so agent can call wait_for_async_answers."""
+        """Test continue logic with async calls - should continue so agent can receive results or launch more."""
         orchestrator = AgentOrchestrator(mock_agent)
 
         sync_calls = []

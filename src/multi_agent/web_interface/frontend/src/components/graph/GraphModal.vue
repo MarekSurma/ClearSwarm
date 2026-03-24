@@ -2,6 +2,7 @@
 import { ref, watch, nextTick } from 'vue'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
+import ProgressSpinner from 'primevue/progressspinner'
 import { useToast } from 'primevue/usetoast'
 import { useGraph } from '@/composables/useGraph'
 import { useNodeDetails } from '@/composables/useNodeDetails'
@@ -119,7 +120,14 @@ function close() {
     </div>
 
     <div class="graph-main-panel">
-      <div ref="graphContainer" class="graph-container" :style="{ background: bgColor }">
+      <div class="graph-container" :style="{ background: bgColor }">
+        <div ref="graphContainer" class="graph-canvas"></div>
+        
+        <div v-if="graph.loading.value" class="graph-loading-overlay">
+          <ProgressSpinner style="width: 50px; height: 50px" strokeWidth="4" fill="transparent" animationDuration=".5s" />
+          <span class="loading-text">Preparing Visualization...</span>
+        </div>
+
         <div class="graph-legend">
           <div class="legend-item"><span class="dot agent"></span> Agent</div>
           <div class="legend-item"><span class="dot tool"></span> Tool</div>
@@ -190,6 +198,36 @@ function close() {
   flex: 1;
   min-height: 400px;
   position: relative;
+}
+
+.graph-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.graph-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(2px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  z-index: 20;
+}
+
+.loading-text {
+  font-weight: 600;
+  color: var(--p-primary-600);
+  font-size: 0.9rem;
 }
 
 .graph-legend {

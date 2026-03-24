@@ -22,7 +22,7 @@ export function useGraph() {
 
   const POLL_ACTIVE_MS = 2000   // 2s when agents are running
   const POLL_IDLE_MS = 10000    // 10s when everything completed
-  const LARGE_GRAPH_THRESHOLD = 150  // disable physics above this
+  const LARGE_GRAPH_THRESHOLD = 300  // disable physics above this
 
   const currentAgentId = ref<string | null>(null)
   const stats = ref<GraphStats>({
@@ -33,22 +33,16 @@ export function useGraph() {
     completed: 0,
     totalErrors: 0,
   })
-  const layoutType = ref(localStorage.getItem(LAYOUT_STORAGE_KEY) || LAYOUT_PHYSICS)
+  const layoutType = ref(LAYOUT_PHYSICS)
   const physicsEnabled = ref(true)
+  const loading = ref(false)
 
-  function getGraphOptions(layout: string) {
+  function getGraphOptions(layout: string, isLarge = false) {
     const baseOptions = {
       nodes: {
         font: { size: 14, color: GRAPH_COLORS.font.primary, face: GRAPH_COLORS.font.face },
         margin: { top: 6, right: 6, bottom: 6, left: 6 },
         borderWidth: 2,
-        shadow: {
-          enabled: true,
-          color: GRAPH_COLORS.shadows.default,
-          size: GRAPH_COLORS.shadows.defaultSize,
-          x: 0,
-          y: 0,
-        },
       },
       edges: {
         width: 2,
@@ -64,6 +58,9 @@ export function useGraph() {
         tooltipDelay: 200,
         zoomView: true,
         dragView: true,
+        hideEdgesOnDrag: isLarge,
+        hideEdgesOnZoom: isLarge,
+        hideNodesOnDrag: false,
       },
     } as any
 
@@ -75,6 +72,7 @@ export function useGraph() {
           smooth: { type: 'cubicBezier', forceDirection: 'vertical', roundness: 0.4 },
         },
         layout: {
+          improvedLayout: !isLarge, 
           hierarchical: {
             enabled: true,
             direction: 'UD',
@@ -85,7 +83,7 @@ export function useGraph() {
           },
         },
         physics: {
-          enabled: true,
+          enabled: true, // Always enabled
           hierarchicalRepulsion: {
             centralGravity: 0.0,
             springLength: 200,
@@ -94,6 +92,7 @@ export function useGraph() {
             damping: 0.09,
           },
           solver: 'hierarchicalRepulsion',
+          stabilization: isLarge ? { enabled: false } : { enabled: true, iterations: 100 },
         },
       }
     }
@@ -102,21 +101,33 @@ export function useGraph() {
       ...baseOptions,
       edges: {
         ...baseOptions.edges,
-        smooth: { type: 'continuous', roundness: 0.5 },
+        smooth: { 
+          enabled: true,
+          type: 'dynamic',       // Dynamic edges help avoid crossings using virtual nodes
+          roundness: 0.5 
+        },
       },
-      layout: { hierarchical: { enabled: false } },
+      layout: { 
+        improvedLayout: false, 
+        hierarchical: { enabled: false } 
+      },
       physics: {
-        enabled: true,
+        enabled: true, // Always enabled
         barnesHut: {
-          gravitationalConstant: -10000,
-          centralGravity: 0.3,
-          springLength: 150,
-          springConstant: 0.04,
-          damping: 0.09,
-          avoidOverlap: 1,
+          gravitationalConstant: -2500,   // Even smaller repulsion
+          centralGravity: 0.01,           // Slightly stronger pull to center
+          springLength: 10,               // Extremely compact distance
+          springConstant: 0.02,           
+          damping: 0.15,                  
+          avoidOverlap: 1,                
         },
         solver: 'barnesHut',
-        stabilization: { enabled: true, iterations: 200, updateInterval: 25 },
+        stabilization: { 
+          enabled: true, 
+          iterations: 5000,               // Same long stabilization for everyone
+          updateInterval: 25,             
+          fit: true
+        },
       },
     }
   }
@@ -165,6 +176,7 @@ export function useGraph() {
   }
 
   async function initializeGraph(agentId: string, container: HTMLElement, onNodeClick?: (nodeId: string) => void) {
+    loading.value = true
     currentAgentId.value = agentId
     nodes = new DataSet([])
     edges = new DataSet([])
@@ -173,39 +185,46 @@ export function useGraph() {
 
     api.resetGraphSequence()
 
-    // Pre-fetch graph data to determine size before creating the network
-    let graphData: GraphData | null = null
     try {
-      const response = await api.getGraphDelta(agentId)
-      if (response && response.type === 'snapshot') {
-        graphData = { nodes: response.nodes, edges: response.edges }
+      // Pre-fetch graph data to determine size before creating the network
+      let graphData: GraphData | null = null
+      try {
+        const response = await api.getGraphDelta(agentId)
+        if (response && response.type === 'snapshot') {
+          graphData = { nodes: response.nodes, edges: response.edges }
+        }
+      } catch (error) {
+        console.error('Failed to load initial graph data:', error)
       }
-    } catch (error) {
-      console.error('Failed to load initial graph data:', error)
-    }
 
-    // Choose layout based on graph size
-    const nodeCount = graphData?.nodes?.length ?? 0
-    const isLargeGraph = nodeCount > LARGE_GRAPH_THRESHOLD
-    let graphOptions: any
+      // Choose layout based on size but don't disable physics
+      const nodeCount = graphData?.nodes?.length ?? 0
+      const isLargeGraph = nodeCount > LARGE_GRAPH_THRESHOLD
+      
+      // Always use physics and chosen layout, even for large graphs as requested
+      const graphOptions = getGraphOptions(layoutType.value, isLargeGraph)
+      physicsEnabled.value = true
 
-    if (isLargeGraph) {
-      // Large graph: use hierarchical layout with no physics to avoid freeze
-      graphOptions = getGraphOptions(LAYOUT_HIERARCHICAL)
-      graphOptions.physics = { enabled: false }
-      physicsEnabled.value = false
-    } else {
-      graphOptions = getGraphOptions(layoutType.value)
-    }
+      // Use setTimeout to yield the main thread and allow the UI to show the loading state
+      await new Promise(resolve => setTimeout(resolve, 50))
 
-    createNetwork(container, graphOptions, onNodeClick)
+      createNetwork(container, graphOptions, onNodeClick)
 
-    // Process the pre-fetched data
-    if (graphData) {
-      processGraphData(graphData)
+      // Process the pre-fetched data
+      if (graphData) {
+        processGraphData(graphData)
 
-      // Fit view after nodes are placed
-      setTimeout(() => network?.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } }), 200)
+        // Fit view after nodes are placed
+        setTimeout(() => {
+          network?.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } })
+          loading.value = false
+        }, 200)
+      } else {
+        loading.value = false
+      }
+    } catch (err) {
+      console.error('Initialization failed', err)
+      loading.value = false
     }
 
     // Only start auto-refresh if there are running agents
@@ -214,15 +233,20 @@ export function useGraph() {
     }
   }
 
-  function buildVisNode(node: GraphNode): any {
+  function buildVisNode(node: GraphNode, isLarge = false): any {
     let borderColor = GRAPH_COLORS.visualizer.borders.default
     let borderWidth = 2
-    let shadowConfig = {
-      enabled: true,
-      color: GRAPH_COLORS.shadows.default,
-      size: 15,
-      x: 0,
-      y: 0,
+    let shadowConfig: any = { enabled: false }
+
+    // Only enable shadows for non-large graphs or for running nodes to save performance
+    if (!isLarge || node.is_running || node.error_count > 0) {
+      shadowConfig = {
+        enabled: true,
+        color: GRAPH_COLORS.shadows.default,
+        size: 15,
+        x: 0,
+        y: 0,
+      }
     }
 
     if (node.is_running) {
@@ -317,44 +341,60 @@ export function useGraph() {
     const existingNodeIds = nodes.getIds() as string[]
     const newNodeIds = graphData.nodes.map((n) => n.id)
     const nodesToRemove = existingNodeIds.filter((id) => !newNodeIds.includes(id))
-    if (nodesToRemove.length > 0) {
-      nodes.remove(nodesToRemove)
-      nodesToRemove.forEach((id) => graphNodeData.delete(id))
-    }
-
+    
+    const isLarge = graphData.nodes.length > LARGE_GRAPH_THRESHOLD
     runningNodeIds.clear()
+
+    const nodesToAdd: any[] = []
+    const nodesToUpdate: any[] = []
 
     graphData.nodes.forEach((node) => {
       graphNodeData.set(node.id, node)
       if (node.is_running) runningNodeIds.add(node.id)
-      const visNode = buildVisNode(node)
+      const visNode = buildVisNode(node, isLarge)
       if (nodes!.get(node.id)) {
-        nodes!.update(visNode)
+        nodesToUpdate.push(visNode)
       } else {
-        nodes!.add(visNode)
+        nodesToAdd.push(visNode)
       }
     })
+
+    if (nodesToRemove.length > 0) nodes.remove(nodesToRemove)
+    if (nodesToAdd.length > 0) nodes.add(nodesToAdd)
+    if (nodesToUpdate.length > 0) nodes.update(nodesToUpdate)
 
     // Update edges
     const existingEdgeIds = edges.getIds() as string[]
     const newEdgeIds = graphData.edges.map((e) => e.id)
     const edgesToRemove = existingEdgeIds.filter((id) => !newEdgeIds.includes(id))
-    if (edgesToRemove.length > 0) edges.remove(edgesToRemove)
+
+    const edgesToAdd: any[] = []
+    const edgesToUpdate: any[] = []
 
     graphData.edges.forEach((edge) => {
       const visEdge = buildVisEdge(edge)
       if (edges!.get(edge.id)) {
-        edges!.update(visEdge)
+        edgesToUpdate.push(visEdge)
       } else {
-        edges!.add(visEdge)
+        edgesToAdd.push(visEdge)
       }
     })
+
+    if (edgesToRemove.length > 0) edges.remove(edgesToRemove)
+    if (edgesToAdd.length > 0) edges.add(edgesToAdd)
+    if (edgesToUpdate.length > 0) edges.update(edgesToUpdate)
 
     updateStats(graphData)
   }
 
   function applyDelta(changes: GraphChange[]) {
     if (!nodes || !edges) return
+
+    const isLarge = (stats.value.totalNodes || 0) > LARGE_GRAPH_THRESHOLD
+    const nodesToUpdate: any[] = []
+    const nodesToRemove: string[] = []
+    const edgesToUpdate: any[] = []
+    const edgesToRemove: string[] = []
 
     for (const change of changes) {
       switch (change.change_type) {
@@ -364,32 +404,34 @@ export function useGraph() {
           graphNodeData.set(nodeData.id, nodeData)
           if (nodeData.is_running) runningNodeIds.add(nodeData.id)
           else runningNodeIds.delete(nodeData.id)
-          const visNode = buildVisNode(nodeData)
-          if (nodes!.get(nodeData.id)) nodes!.update(visNode)
-          else nodes!.add(visNode)
+          nodesToUpdate.push(buildVisNode(nodeData, isLarge))
           break
         }
         case 'node_remove':
-          nodes!.remove(change.entity_id)
+          nodesToRemove.push(change.entity_id)
           runningNodeIds.delete(change.entity_id)
           graphNodeData.delete(change.entity_id)
           break
         case 'edge_add':
         case 'edge_update': {
           const edgeData = change.data as GraphEdge
-          const visEdge = buildVisEdge(edgeData)
-          if (edges!.get(edgeData.id)) edges!.update(visEdge)
-          else edges!.add(visEdge)
+          edgesToUpdate.push(buildVisEdge(edgeData))
           break
         }
         case 'edge_remove':
-          edges!.remove(change.entity_id)
+          edgesToRemove.push(change.entity_id)
           break
       }
     }
 
+    if (nodesToRemove.length > 0) nodes.remove(nodesToRemove)
+    if (nodesToUpdate.length > 0) nodes.update(nodesToUpdate)
+    if (edgesToRemove.length > 0) edges.remove(edgesToRemove)
+    if (edgesToUpdate.length > 0) edges.update(edgesToUpdate)
+
     recalculateStats()
   }
+
 
   async function loadGraphData(retries = 1) {
     if (!currentAgentId.value || !nodes || !edges) return
@@ -590,6 +632,7 @@ export function useGraph() {
     stats,
     layoutType,
     physicsEnabled,
+    loading,
     initializeGraph,
     loadGraphData,
     cleanup,
