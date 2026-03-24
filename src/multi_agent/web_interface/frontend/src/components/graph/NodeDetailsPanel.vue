@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
+import { ref, watch, nextTick, computed } from 'vue'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
+import Dialog from 'primevue/dialog'
 import type { ExecutionLog, ToolExecution } from '@/types/execution'
 import { toDisplayName } from '@/utils/nameFormatting'
 
@@ -19,16 +20,37 @@ const emit = defineEmits<{
 }>()
 
 const scrollContainer = ref<HTMLDivElement | null>(null)
+const showQuestionModal = ref(false)
+const showAnswerModal = ref(false)
 
+// Scroll to top when the selected node changes
 watch(
-  () => props.agentLog?.interactions?.length,
-  async () => {
-    await nextTick()
-    if (scrollContainer.value) {
-      scrollContainer.value.scrollTop = scrollContainer.value.scrollHeight
+  () => props.agentLog?.agent_id,
+  async (newId, oldId) => {
+    if (newId !== oldId) {
+      await nextTick()
+      if (scrollContainer.value) {
+        scrollContainer.value.scrollTop = 0
+      }
     }
   }
 )
+
+const initialQuestion = computed(() => {
+  if (!props.agentLog?.interactions) return ''
+  const firstUserMessage = props.agentLog.interactions.find(m => m.role === 'user')
+  return firstUserMessage?.content || ''
+})
+
+const truncatedQuestion = computed(() => {
+  const q = initialQuestion.value
+  return q.length > 100 ? q.substring(0, 100) + '...' : q
+})
+
+const truncatedAnswer = computed(() => {
+  const a = props.agentLog?.final_response || ''
+  return a.length > 100 ? a.substring(0, 100) + '...' : a
+})
 
 function escapeHtml(text: string): string {
   if (!text) return ''
@@ -115,8 +137,28 @@ function getRoleStyle(role: string) {
           </div>
         </div>
 
+        <div v-if="initialQuestion" class="detail-section">
+          <div class="section-label">QUESTION</div>
+          <div
+            class="result-block clickable"
+            v-tooltip.bottom="initialQuestion"
+            @click="showQuestionModal = true"
+            v-html="escapeHtml(truncatedQuestion)"
+          />
+        </div>
+
+        <div v-if="agentLog.final_response" class="detail-section">
+          <div class="section-label">ANSWER</div>
+          <div
+            class="result-block clickable"
+            v-tooltip.bottom="agentLog.final_response"
+            @click="showAnswerModal = true"
+            v-html="escapeHtml(truncatedAnswer)"
+          />
+        </div>
+
         <div class="section-divider">
-          <span>CONVERSATION LOG</span>
+          <span>RAW LOG</span>
         </div>
 
         <div class="conversation">
@@ -183,6 +225,15 @@ function getRoleStyle(role: string) {
         <div class="empty-state-text">Streaming agent state...</div>
       </div>
     </div>
+
+    <!-- Modals -->
+    <Dialog v-model:visible="showQuestionModal" header="Question" modal :style="{ width: '60vw' }">
+      <pre class="full-text-modal">{{ initialQuestion }}</pre>
+    </Dialog>
+
+    <Dialog v-model:visible="showAnswerModal" header="Answer" modal :style="{ width: '60vw' }">
+      <pre class="full-text-modal">{{ agentLog?.final_response }}</pre>
+    </Dialog>
   </div>
 </template>
 
@@ -414,6 +465,29 @@ function getRoleStyle(role: string) {
   overflow-y: auto;
   border: 1px solid var(--p-surface-200);
   color: var(--p-surface-700);
+}
+
+.result-block.clickable {
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.result-block.clickable:hover {
+  background: var(--p-surface-100);
+  border-color: var(--p-primary-300);
+}
+
+.full-text-modal {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  background: var(--p-surface-50);
+  padding: 1rem;
+  border-radius: 4px;
+  font-family: inherit;
+  margin: 0;
+  max-height: 60vh;
+  overflow-y: auto;
+  color: var(--p-surface-800);
 }
 
 :deep(.xml-tag) {

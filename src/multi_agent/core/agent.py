@@ -288,9 +288,43 @@ class Agent:
 
             return final_response
 
+        except Exception as e:
+            error_msg = f"Agent execution failed with error: {str(e)}"
+            self._log(error_msg, "ERROR")
+            import traceback
+            traceback.print_exc()
+            
+            # Update final response to include error for UI
+            final_response = error_msg
+            
+            # Save error message to conversation for logging
+            self.messages.append({
+                "role": "system",
+                "content": f"CRITICAL ERROR: {str(e)}",
+                "timestamp": datetime.now().isoformat()
+            })
+            
+            return final_response
+
         finally:
-            # Mark agent as completed in database
-            self.db.complete_agent_execution(self.agent_id, final_response)
+            # Mark agent as completed in database (use 'error' state if failed)
+            final_state = 'completed'
+            
+            # Use sys.exc_info() or check if an error message was generated
+            import sys
+            exc_type, _, _ = sys.exc_info()
+            
+            if exc_type is not None or (not session_ended and iterations >= max_iterations):
+                if exc_type is not None:
+                    final_state = 'error'
+                else:
+                    # Max iterations reached without session_ended_explicitly
+                    final_state = 'completed' # Or 'warning'? keeping as completed for now but maybe mark as error if we want it red
+            
+            if session_ended:
+                final_state = 'completed'
+
+            self.db.complete_agent_execution(self.agent_id, final_response, state=final_state)
 
             # Save final log
             self.interaction_log["completed_at"] = datetime.now().isoformat()
@@ -335,7 +369,8 @@ class Agent:
             # Save log incrementally even on error
             self._save_log_file()
 
-            return error_msg
+            # Raise the exception so Agent.run can catch it and mark as error state
+            raise RuntimeError(error_msg) from e
 
     def _extract_tool_call(self, text: str) -> Optional[Dict[str, Any]]:
         """

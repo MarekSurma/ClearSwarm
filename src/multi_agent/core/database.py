@@ -207,13 +207,14 @@ class AgentDatabase:
 
         return agent_id
 
-    def complete_agent_execution(self, agent_id: str, final_response: Optional[str] = None):
+    def complete_agent_execution(self, agent_id: str, final_response: Optional[str] = None, state: str = 'completed'):
         """
         Mark an agent execution as completed.
 
         Args:
             agent_id: ID of the agent execution to complete
             final_response: Final response from the agent
+            state: Final state of the agent (default: 'completed')
         """
         completed_at = datetime.now().isoformat()
 
@@ -221,9 +222,9 @@ class AgentDatabase:
             cursor = conn.cursor()
             cursor.execute("""
                 UPDATE agent_executions
-                SET completed_at = ?, current_state = 'completed', final_response = ?
+                SET completed_at = ?, current_state = ?, final_response = ?
                 WHERE agent_id = ?
-            """, (completed_at, final_response, agent_id))
+            """, (completed_at, state, final_response, agent_id))
             conn.commit()
 
     def update_agent_question(self, agent_id: str, question: str):

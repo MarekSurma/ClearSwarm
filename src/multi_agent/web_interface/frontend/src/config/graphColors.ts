@@ -38,12 +38,14 @@ export const GRAPH_COLORS = {
     root: {
       background: '#4bb7df',
       backgroundRunning: '#6dc9e8',
+      backgroundError: '#e57373',
       font: '#352020',
       size: 30,
     },
     agent: {
       background: '#2d6d84',
       backgroundRunning: '#3d8da4',
+      backgroundError: '#d32f2f',
       font: '#aee8ff',
       size: 20,
     },

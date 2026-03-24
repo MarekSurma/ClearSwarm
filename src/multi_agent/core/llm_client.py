@@ -115,7 +115,8 @@ class OpenAILLMClient(LLMClient):
                 model=model,
                 messages=messages,
                 temperature=temperature,
-                stream=True
+                stream=True,
+                timeout=Config.OPENAI_API_TIMEOUT
             )
 
             # Collect streamed response

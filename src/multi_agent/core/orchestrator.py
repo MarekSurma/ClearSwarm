@@ -436,6 +436,10 @@ class AgentOrchestrator:
         self.conversation = ConversationManager(agent.messages, agent.prompts)
         self._waiting_for_all_results = False
 
+    def _save(self) -> None:
+        """Save agent execution log to file for live monitoring."""
+        self.agent._save_log_file()
+
     @property
     def waiting_for_all_results(self) -> bool:
         """Whether the agent is in batch-wait mode for async results."""
@@ -463,6 +467,7 @@ class AgentOrchestrator:
 
         # Update state
         self.agent.db.update_agent_state(self.agent.agent_id, 'generating')
+        self.agent._save_log_file() # Ensure state is saved
 
         # Inject pending tasks info
         pending_tasks_msg = await self.task_manager.build_pending_tasks_message(self.agent.prompts)
@@ -484,6 +489,7 @@ class AgentOrchestrator:
             # No tool call - warn and continue
             self.agent._log(self.agent.prompts.get_log_message('warning_no_tool_call'), "WARNING")
             self.conversation.add_no_tool_call_warning()
+            self._save()
             return response, True, False
 
         # Process tool calls
@@ -515,6 +521,7 @@ class AgentOrchestrator:
                 self.conversation.add_user_message(
                     f"Error parsing tool call for '{tool_call['tool_name']}': {tool_call['parse_error']}"
                 )
+                self._save()
             else:
                 valid_tool_calls.append(tool_call)
 
@@ -523,6 +530,7 @@ class AgentOrchestrator:
 
         # Add assistant message
         self.conversation.add_assistant_message(response)
+        self._save()
 
         # Execute sync calls
         if sync_calls:
@@ -542,6 +550,7 @@ class AgentOrchestrator:
             # Notify about any newly launched tasks
             if launched_task_ids:
                 self.conversation.add_tasks_launched_notification(launched_task_ids)
+                self._save()
 
             has_outstanding = await self.task_manager.has_outstanding_tasks()
 
@@ -550,6 +559,7 @@ class AgentOrchestrator:
                 self.conversation.add_system_message(
                     self.agent.prompts.get_runtime_message('wait_for_async_acknowledged')
                 )
+                self._save()
                 self.agent.db.update_agent_state(self.agent.agent_id, 'waiting')
                 return response, False, False
             else:
@@ -557,6 +567,7 @@ class AgentOrchestrator:
                 self.conversation.add_system_message(
                     self.agent.prompts.get_runtime_message('wait_for_async_no_tasks')
                 )
+                self._save()
                 # Continue only if there were sync results to react to
                 should_continue = bool(sync_calls)
                 if should_continue:
@@ -566,6 +577,7 @@ class AgentOrchestrator:
         # Notify about launched tasks (standard mode)
         if launched_task_ids:
             self.conversation.add_tasks_launched_notification(launched_task_ids)
+            self._save()
 
         # Determine if should continue
         should_continue = self._should_continue_generating(sync_calls, async_calls)
@@ -605,8 +617,10 @@ class AgentOrchestrator:
             )
 
             self.conversation.add_tool_result(tool_call['tool_name'], result)
+            self._save()
 
     async def _launch_async_calls(self, async_calls: List[Dict[str, Any]]) -> List[str]:
+
         """Launch asynchronous tool calls."""
         self.agent._log(
             self.agent.prompts.get_log_message('launching_async_tools', count=len(async_calls))
@@ -675,6 +689,7 @@ class AgentOrchestrator:
             )
 
             self.conversation.add_end_session_warning(outstanding_count, pending_list)
+            self._save()
             self.agent.db.update_agent_state(self.agent.agent_id, 'waiting')
 
             return response, False, False
@@ -733,6 +748,7 @@ class AgentOrchestrator:
         # Deliver batch results
         if results and not session_ended:
             self.conversation.add_all_tasks_completed(results)
+            self._save()
 
         self._waiting_for_all_results = False
         return not session_ended
@@ -820,6 +836,7 @@ class AgentOrchestrator:
         # Add to conversation if session not ended
         if not session_ended:
             self.conversation.add_task_completed(task_id, result)
+            self._save()
 
         # Remove from pending and mark as processed
         await self.task_manager.remove_task(task_id)

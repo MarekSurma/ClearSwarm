@@ -21,6 +21,7 @@ class Config:
     OPENAI_API_BASE = os.getenv('OPENAI_API_BASE', 'https://api.openai.com/v1')
     OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
     OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-4')
+    OPENAI_API_TIMEOUT = float(os.getenv('OPENAI_API_TIMEOUT', '60.0')) # 1 minute timeout by default
 
     @classmethod
     def validate(cls):

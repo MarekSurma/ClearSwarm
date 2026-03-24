@@ -257,7 +257,11 @@ export function useGraph() {
       : node.group === 'tool'
         ? GRAPH_COLORS.visualizer.tool
         : GRAPH_COLORS.visualizer.agent
-    const bgColor = node.is_running ? groupConfig.backgroundRunning : groupConfig.background
+    
+    let bgColor = node.is_running ? groupConfig.backgroundRunning : groupConfig.background
+    if (!node.is_running && node.current_state === 'error') {
+      bgColor = (groupConfig as any).backgroundError || '#d32f2f'
+    }
 
     let enhancedLabel = node.label
     if (node.is_running && node.current_state && node.group !== 'tool') {
@@ -451,15 +455,31 @@ export function useGraph() {
     if (runningNodeIds.size > LARGE_GRAPH_THRESHOLD) return
     animationPhase += 0.15
     const pulsatingSize = getPulsatingShadowSize()
+    const pulsatingBorder = 4 + Math.sin(animationPhase) * 2 // Pulse between 2 and 6
+    
     // Batch update all running nodes at once (instead of per-node update)
     const updates: any[] = []
     runningNodeIds.forEach((nodeId) => {
       const node = nodes!.get(nodeId)
-      if (node?.shadow?.size > 15) {
-        updates.push({
-          id: nodeId,
-          shadow: { ...node.shadow, size: pulsatingSize },
-        })
+      const nodeData = graphNodeData.get(nodeId)
+      
+      if (node) {
+        const update: any = { id: nodeId }
+        let changed = false
+        
+        if (node.shadow?.size !== pulsatingSize) {
+          update.shadow = { ...node.shadow, size: pulsatingSize }
+          changed = true
+        }
+        
+        if (nodeData?.current_state === 'generating') {
+          if (node.borderWidth !== pulsatingBorder) {
+            update.borderWidth = pulsatingBorder
+            changed = true
+          }
+        }
+        
+        if (changed) updates.push(update)
       }
     })
     if (updates.length > 0) nodes!.update(updates)

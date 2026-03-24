@@ -93,22 +93,18 @@ export function useNodeDetails() {
       try {
         if (nodeType.value === 'agent') {
           const logData = await api.getExecutionLog(selectedNodeId.value)
-          const newCount = logData.interactions?.length || 0
-          const iterationsChanged = logData.total_iterations !== agentLog.value?.total_iterations
-          if (newCount !== lastMessageCount || iterationsChanged) {
-            agentLog.value = logData
-            lastMessageCount = newCount
-          }
+          agentLog.value = logData
+          lastMessageCount = logData.interactions?.length || 0
+          
           if (logData.session_ended_explicitly !== null) {
             isRunning.value = false
-            agentLog.value = logData // ensure final state is captured
             stopRefresh()
           }
         }
       } catch {
         // Ignore refresh errors
       }
-    }, 1000)
+    }, 2000)
   }
 
   function stopRefresh() {
