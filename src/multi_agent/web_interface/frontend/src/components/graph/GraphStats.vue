@@ -58,7 +58,6 @@ defineProps<{
   gap: 1rem;
   padding: 0.5rem 1rem;
   background: var(--p-surface-50);
-  border-bottom: 1px solid var(--p-surface-200);
   font-size: 0.8rem;
   flex-wrap: wrap;
 }

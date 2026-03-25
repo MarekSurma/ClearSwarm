@@ -90,7 +90,7 @@ function close() {
       <div class="graph-dialog-header">
         <div class="header-left">
           <i class="pi pi-share-alt header-icon" />
-          <span class="dialog-title">ClearSwarm Visualizer</span>
+          <span class="dialog-title">Visualizer</span>
         </div>
         <div class="header-actions">
            <Button
@@ -166,13 +166,13 @@ function close() {
 }
 
 .header-icon {
-  font-size: 1.25rem;
+  font-size: 1rem;
   color: var(--p-primary-500);
 }
 
 .dialog-title {
   font-weight: 700;
-  font-size: 1.1rem;
+  font-size: 1rem;
   color: var(--p-surface-800);
 }
 
@@ -181,7 +181,7 @@ function close() {
   align-items: center;
   justify-content: space-between;
   padding: 0.5rem 1rem;
-  background: var(--p-surface-0);
+  background: var(--p-surface-50);
   border-bottom: 1px solid var(--p-surface-200);
   gap: 1rem;
   flex-wrap: wrap;

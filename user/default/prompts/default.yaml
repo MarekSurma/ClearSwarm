@@ -55,6 +55,7 @@ system_prompts:
     <tool_call>
     <tool_name>name_of_tool</tool_name>
     <call_mode>synchronous|asynchronous</call_mode>  <!-- OPTIONAL: defaults to 'synchronous' -->
+    <wait_for_all_finished>true|false</wait_for_all_finished> <!-- OPTIONAL: defaults to 'false' -->
     <parameters>
     {"param1": "value1", "param2": "value2"}
     </parameters>
@@ -76,6 +77,11 @@ system_prompts:
     - You can continue generating or make more tool calls
     - Result arrives later via system notification
     - Use for independent tasks that can run in parallel
+
+    **wait_for_all_finished**:
+    - If set to true for ANY asynchronous call in a response, the system will wait for ALL outstanding tasks to complete before giving you control again.
+    - Results will be delivered as a single batch message.
+    - Use when you want to run multiple tasks in parallel but need all their results before your next decision.
 
 
   # Examples of tool calls
@@ -100,19 +106,21 @@ system_prompts:
     </parameters>
     </tool_call>
 
-    Example 3 - Multiple synchronous calls (executed in order):
+    Example 3 - Asynchronous calls with wait (parallel execution, batch results):
     <tool_call>
-    <tool_name>calculator</tool_name>
-    <call_mode>synchronous</call_mode>
+    <tool_name>question_answerer</tool_name>
+    <call_mode>asynchronous</call_mode>
+    <wait_for_all_finished>true</wait_for_all_finished>
     <parameters>
-    {"operation": "add", "a": 25, "b": 25}
+    {"message": "Query 1"}
     </parameters>
     </tool_call>
     <tool_call>
-    <tool_name>calculator</tool_name>
-    <call_mode>synchronous</call_mode>
+    <tool_name>question_answerer</tool_name>
+    <call_mode>asynchronous</call_mode>
+    <wait_for_all_finished>true</wait_for_all_finished>
     <parameters>
-    {"operation": "multiply", "a": 123, "b": 50}
+    {"message": "Query 2"}
     </parameters>
     </tool_call>
 
@@ -123,9 +131,10 @@ system_prompts:
     - ALWAYS use <tool_name>...</tool_name> tags (NOT custom tags like <calculator> or <math_assistant>)
     - ALWAYS use <parameters>...</parameters> tags for the JSON
     - <call_mode> is OPTIONAL - omit it or use 'synchronous' as default
+    - <wait_for_all_finished> is OPTIONAL - omit it or use 'false' as default
     - The JSON must use EXACT parameter names as listed above
     - For synchronous calls: results appear immediately in conversation
-    - For asynchronous calls: results arrive later via system notification
+    - For asynchronous calls: results arrive later via system notification (unless wait_for_all_finished is true)
     - You can mix synchronous and asynchronous calls in one response
 
 
