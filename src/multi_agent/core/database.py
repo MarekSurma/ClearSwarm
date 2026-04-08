@@ -133,6 +133,12 @@ class AgentDatabase:
             if 'final_response' not in agent_columns:
                 cursor.execute("ALTER TABLE agent_executions ADD COLUMN final_response TEXT")
 
+            # Add invalid_response_count column to agent_executions if it doesn't exist (migration)
+            cursor.execute("PRAGMA table_info(agent_executions)")
+            agent_columns = [col[1] for col in cursor.fetchall()]
+            if 'invalid_response_count' not in agent_columns:
+                cursor.execute("ALTER TABLE agent_executions ADD COLUMN invalid_response_count INTEGER DEFAULT 0")
+
             # Index on project_dir (must be after migration that adds the column)
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_agent_executions_project
@@ -244,6 +250,22 @@ class AgentDatabase:
             """, (question, agent_id))
             conn.commit()
 
+    def increment_invalid_response_count(self, agent_id: str) -> None:
+        """
+        Increment the invalid LLM response counter for an agent execution.
+
+        Args:
+            agent_id: ID of the agent execution
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE agent_executions
+                SET invalid_response_count = COALESCE(invalid_response_count, 0) + 1
+                WHERE agent_id = ?
+            """, (agent_id,))
+            conn.commit()
+
     def update_log_file(self, agent_id: str, log_file: str):
         """
         Update the log file path for an agent execution.
@@ -313,7 +335,7 @@ class AgentDatabase:
                 cursor.execute("""
                     SELECT agent_id, agent_name, parent_agent_id, parent_agent_name,
                            started_at, completed_at, current_state, call_mode, log_file, project_dir,
-                           question, final_response
+                           question, final_response, invalid_response_count
                     FROM agent_executions
                     WHERE project_dir = ?
                     ORDER BY started_at DESC
@@ -322,7 +344,7 @@ class AgentDatabase:
                 cursor.execute("""
                     SELECT agent_id, agent_name, parent_agent_id, parent_agent_name,
                            started_at, completed_at, current_state, call_mode, log_file, project_dir,
-                           question, final_response
+                           question, final_response, invalid_response_count
                     FROM agent_executions
                     ORDER BY started_at DESC
                 """)
@@ -342,7 +364,8 @@ class AgentDatabase:
                     'log_file': row[8] if len(row) > 8 else None,
                     'project_dir': row[9] if len(row) > 9 else 'default',
                     'question': row[10] if len(row) > 10 else None,
-                    'final_response': row[11] if len(row) > 11 else None
+                    'final_response': row[11] if len(row) > 11 else None,
+                    'invalid_response_count': row[12] if len(row) > 12 else 0
                 }
                 for row in rows
             ]

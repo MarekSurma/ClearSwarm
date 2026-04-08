@@ -482,10 +482,12 @@ def _build_graph(agent_id: str) -> Optional[GraphData]:
         label = f"{exec_data['agent_name'].replace('_', ' ')}\n[{aid[:8]}]"
 
         agent_tools = tools_by_agent.get(aid, [])
-        agent_error_count = sum(
+        tool_error_count = sum(
             1 for t in agent_tools
             if _is_error_result(t.get('result', '') or '')
         )
+        invalid_response_count = exec_data.get('invalid_response_count', 0) or 0
+        agent_error_count = tool_error_count + invalid_response_count
 
         nodes.append(GraphNode(
             id=aid, label=label, group=group, color=color,

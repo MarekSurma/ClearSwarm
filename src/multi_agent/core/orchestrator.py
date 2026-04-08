@@ -486,8 +486,10 @@ class AgentOrchestrator:
         tool_calls = self.tool_handler.extract_all_tool_calls(response)
 
         if not tool_calls:
-            # No tool call - warn and continue
+            # No tool call - save the response so it's visible in logs, then warn
             self.agent._log(self.agent.prompts.get_log_message('warning_no_tool_call'), "WARNING")
+            self.agent.db.increment_invalid_response_count(self.agent.agent_id)
+            self.conversation.add_assistant_message(response)
             self.conversation.add_no_tool_call_warning()
             self._save()
             return response, True, False
@@ -518,6 +520,7 @@ class AgentOrchestrator:
         valid_tool_calls = []
         for tool_call in tool_calls:
             if 'parse_error' in tool_call:
+                self.agent.db.increment_invalid_response_count(self.agent.agent_id)
                 self.conversation.add_user_message(
                     f"Error parsing tool call for '{tool_call['tool_name']}': {tool_call['parse_error']}"
                 )
