@@ -21,7 +21,8 @@ class Config:
     OPENAI_API_BASE = os.getenv('OPENAI_API_BASE', 'https://api.openai.com/v1')
     OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
     OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-4')
-    OPENAI_API_TIMEOUT = float(os.getenv('OPENAI_API_TIMEOUT', '60.0')) # 1 minute timeout by default
+    OPENAI_API_TIMEOUT = float(os.getenv('OPENAI_API_TIMEOUT', '120.0')) # 2 minute timeout by default
+    OPENAI_MAX_TOKENS = int(os.getenv('OPENAI_MAX_TOKENS', '16384'))  # Max tokens for LLM response
 
     @classmethod
     def validate(cls):

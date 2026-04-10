@@ -11,9 +11,11 @@ export function useWebSocket() {
   let ws: WebSocket | null = null
   let reconnectAttempts = 0
   let pingInterval: ReturnType<typeof setInterval> | null = null
+  let intentionalDisconnect = false
   const handlers: Array<(msg: WebSocketMessage) => void> = []
 
   function connect() {
+    intentionalDisconnect = false
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const projectParam = encodeURIComponent(currentProject.value.project_dir)
     const wsUrl = `${protocol}//${window.location.host}/ws/updates?project=${projectParam}`
@@ -54,8 +56,8 @@ export function useWebSocket() {
           pingInterval = null
         }
 
-        // Exponential backoff reconnect
-        if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+        // Exponential backoff reconnect (skip if disconnect was intentional)
+        if (!intentionalDisconnect && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
           reconnectAttempts++
           const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
           setTimeout(() => connect(), delay)
@@ -67,6 +69,7 @@ export function useWebSocket() {
   }
 
   function disconnect() {
+    intentionalDisconnect = true
     if (pingInterval) {
       clearInterval(pingInterval)
       pingInterval = null
@@ -75,6 +78,7 @@ export function useWebSocket() {
       ws.close()
       ws = null
     }
+    handlers.length = 0
     isConnected.value = false
   }
 

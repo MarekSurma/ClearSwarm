@@ -31,7 +31,8 @@ class ToolCallHandler:
             text: Text that may contain multiple tool calls
 
         Returns:
-            List of dictionaries with tool_name, parameters, call_mode, and wait_for_all_finished
+            List of dictionaries with tool_name, parameters, call_mode,
+            wait_for_all_finished, and include_call_params_in_response
         """
         # More robust extraction that handles tags in any order
         tool_call_pattern = r'<tool_call>(.*?)</tool_call>'
@@ -40,16 +41,39 @@ class ToolCallHandler:
         tool_calls = []
         for match in matches:
             content = match.group(1)
-            
+
             # Extract tags within the tool_call block
             tool_name_match = re.search(r'<tool_name>(.*?)</tool_name>', content, re.DOTALL)
             call_mode_match = re.search(r'<call_mode>(.*?)</call_mode>', content, re.DOTALL)
             wait_match = re.search(r'<wait_for_all_finished>(.*?)</wait_for_all_finished>', content, re.DOTALL)
             parameters_match = re.search(r'<parameters>(.*?)</parameters>', content, re.DOTALL)
-            
+            if not parameters_match:
+                # Fallback: LLM omitted </parameters> — grab content from <parameters> to end of block
+                parameters_match = re.search(r'<parameters>(.*)', content, re.DOTALL)
+
+            # Parse <include_call_params_in_response> — supports both self-closing
+            # (<include_call_params_in_response />) and open/close with value
+            # (<include_call_params_in_response>true</include_call_params_in_response>).
+            include_input_self_closing = re.search(
+                r'<include_call_params_in_response\s*/>', content
+            )
+            include_input_open_close = re.search(
+                r'<include_call_params_in_response>(.*?)</include_call_params_in_response>',
+                content,
+                re.DOTALL,
+            )
+            if include_input_self_closing:
+                include_call_params_in_response = True
+            elif include_input_open_close:
+                include_call_params_in_response = (
+                    include_input_open_close.group(1).strip().lower() == 'true'
+                )
+            else:
+                include_call_params_in_response = False
+
             if not tool_name_match or not parameters_match:
                 continue
-                
+
             tool_name = tool_name_match.group(1).strip()
             call_mode = call_mode_match.group(1).strip() if call_mode_match else 'synchronous'
             wait_for_all = wait_match.group(1).strip().lower() == 'true' if wait_match else False
@@ -61,6 +85,7 @@ class ToolCallHandler:
                     'tool_name': tool_name,
                     'call_mode': call_mode,
                     'wait_for_all_finished': wait_for_all,
+                    'include_call_params_in_response': include_call_params_in_response,
                     'parameters': parameters
                 })
             except json.JSONDecodeError as e:
@@ -69,6 +94,7 @@ class ToolCallHandler:
                     'tool_name': tool_name,
                     'call_mode': call_mode,
                     'wait_for_all_finished': wait_for_all,
+                    'include_call_params_in_response': include_call_params_in_response,
                     'parameters': {},
                     'parse_error': f"Invalid JSON in parameters: {str(e)}"
                 })
@@ -151,7 +177,8 @@ class TaskManager:
         task_id: str,
         tool_name: str,
         parameters: Dict[str, Any],
-        execute_func: Callable[[str, Dict[str, Any], str], Awaitable[str]]
+        execute_func: Callable[[str, Dict[str, Any], str], Awaitable[str]],
+        include_call_params_in_response: bool = False,
     ) -> None:
         """
         Launch an asynchronous task.
@@ -161,14 +188,26 @@ class TaskManager:
             tool_name: Name of the tool to execute
             parameters: Parameters for the tool
             execute_func: Async function to execute the tool (tool_name, params, call_mode) -> result
+            include_call_params_in_response: If True, the result message delivered
+                to the agent will include the tool name and parameters so
+                the agent can disambiguate concurrent calls.
         """
+        # Snapshot of task metadata that travels with the result through
+        # the queue — this way it stays available even after the task
+        # is removed from pending_tasks_info in the finally block.
+        task_info_snapshot = {
+            "tool_name": tool_name,
+            "parameters": parameters,
+            "include_call_params_in_response": include_call_params_in_response,
+        }
+
         async def _task_wrapper():
             try:
                 result = await execute_func(tool_name, parameters, call_mode='asynchronous')
-                await self.completed_results.put((task_id, result))
+                await self.completed_results.put((task_id, result, task_info_snapshot))
             except Exception as e:
                 error_msg = f"Error in task {task_id}: {str(e)}"
-                await self.completed_results.put((task_id, error_msg))
+                await self.completed_results.put((task_id, error_msg, task_info_snapshot))
             finally:
                 # Ensure task is removed from pending even if queue put fails
                 async with self.tasks_lock:
@@ -181,11 +220,14 @@ class TaskManager:
             self.pending_tasks_info[task_id] = {
                 "tool_name": tool_name,
                 "parameters": parameters,
-                "launched_at": datetime.now().isoformat()
+                "launched_at": datetime.now().isoformat(),
+                "include_call_params_in_response": include_call_params_in_response,
             }
             self._launched_count += 1
 
-    async def wait_for_result(self, timeout: Optional[float] = None) -> Optional[Tuple[str, str]]:
+    async def wait_for_result(
+        self, timeout: Optional[float] = None
+    ) -> Optional[Tuple[str, str, Dict[str, Any]]]:
         """
         Wait for a task result.
 
@@ -193,7 +235,9 @@ class TaskManager:
             timeout: Timeout in seconds (None for no timeout)
 
         Returns:
-            Tuple of (task_id, result) or None if timeout
+            Tuple of (task_id, result, task_info) or None if timeout.
+            ``task_info`` contains tool_name, parameters, and the
+            include_call_params_in_response flag captured at launch time.
         """
         try:
             return await asyncio.wait_for(
@@ -360,17 +404,62 @@ class ConversationManager:
             "timestamp": datetime.now().isoformat()
         })
 
-    def add_tool_result(self, tool_name: str, result: str) -> None:
-        """Add tool result as user message."""
-        self.add_user_message(
-            self.prompts.get_runtime_message('tool_result', tool_name=tool_name, result=result)
-        )
+    def add_tool_result(
+        self,
+        tool_name: str,
+        parameters: Dict[str, Any],
+        result: str,
+        include_input: bool = False,
+    ) -> None:
+        """Add tool result as user message.
 
-    def add_task_completed(self, task_id: str, result: str) -> None:
-        """Add task completion as user message."""
-        self.add_user_message(
-            self.prompts.get_runtime_message('task_completed', task_id=task_id, result=result)
-        )
+        If ``include_input`` is True, the message includes the parameters
+        that were passed to the tool — useful when the agent made several
+        calls to the same tool in one response and needs to disambiguate
+        which result belongs to which call.
+        """
+        if include_input:
+            msg = self.prompts.get_runtime_message(
+                'tool_result_with_input',
+                tool_name=tool_name,
+                parameters=json.dumps(parameters, ensure_ascii=False),
+                result=result,
+            )
+        else:
+            msg = self.prompts.get_runtime_message(
+                'tool_result', tool_name=tool_name, result=result
+            )
+        self.add_user_message(msg)
+
+    def add_task_completed(
+        self,
+        task_id: str,
+        result: str,
+        task_info: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Add task completion as user message.
+
+        If ``task_info`` contains ``include_call_params_in_response=True``, the
+        message includes the tool name and parameters that were passed
+        at launch time.
+        """
+        task_info = task_info or {}
+        include_input = task_info.get('include_call_params_in_response', False)
+        if include_input:
+            msg = self.prompts.get_runtime_message(
+                'task_completed_with_input',
+                task_id=task_id,
+                tool_name=task_info.get('tool_name', ''),
+                parameters=json.dumps(
+                    task_info.get('parameters', {}), ensure_ascii=False
+                ),
+                result=result,
+            )
+        else:
+            msg = self.prompts.get_runtime_message(
+                'task_completed', task_id=task_id, result=result
+            )
+        self.add_user_message(msg)
 
     def add_tasks_launched_notification(self, task_ids: List[str]) -> None:
         """Add notification about launched tasks."""
@@ -380,7 +469,7 @@ class ConversationManager:
             task_count=len(task_ids),
             task_list=task_list
         )
-        self.add_system_message(notification_msg)
+        self.add_user_message(notification_msg)
 
     def add_end_session_warning(self, pending_count: int, task_list: str) -> None:
         """Add warning about ending session with pending tasks."""
@@ -389,27 +478,46 @@ class ConversationManager:
             pending_count=pending_count,
             task_list=task_list
         )
-        self.add_system_message(warning_msg)
+        self.add_user_message(warning_msg)
 
 
-    def add_all_tasks_completed(self, results: List[Tuple[str, str]]) -> None:
-        """Add all task results as a single batch message."""
+    def add_all_tasks_completed(
+        self, results: List[Tuple[str, str, Dict[str, Any]]]
+    ) -> None:
+        """Add all task results as a single batch message.
+
+        Each item is a tuple (task_id, result, task_info). If any item has
+        ``task_info['include_call_params_in_response']=True``, that item's entry
+        will include the tool name and parameters.
+        """
         msg = self.prompts.get_runtime_message(
             'all_tasks_completed_batch_header',
             task_count=len(results)
         )
-        for task_id, result in results:
-            msg += self.prompts.get_runtime_message(
-                'all_tasks_completed_batch_item',
-                task_id=task_id,
-                result=result
-            )
+        for task_id, result, task_info in results:
+            task_info = task_info or {}
+            if task_info.get('include_call_params_in_response', False):
+                msg += self.prompts.get_runtime_message(
+                    'all_tasks_completed_batch_item_with_input',
+                    task_id=task_id,
+                    tool_name=task_info.get('tool_name', ''),
+                    parameters=json.dumps(
+                        task_info.get('parameters', {}), ensure_ascii=False
+                    ),
+                    result=result,
+                )
+            else:
+                msg += self.prompts.get_runtime_message(
+                    'all_tasks_completed_batch_item',
+                    task_id=task_id,
+                    result=result
+                )
         self.add_user_message(msg)
 
     def add_no_tool_call_warning(self) -> None:
         """Add warning about missing tool call."""
         reminder_msg = self.prompts.get_runtime_message('no_tool_call_warning')
-        self.add_system_message(reminder_msg)
+        self.add_user_message(reminder_msg)
 
     def remove_last_message(self) -> None:
         """Remove last message from conversation."""
@@ -472,7 +580,7 @@ class AgentOrchestrator:
         # Inject pending tasks info
         pending_tasks_msg = await self.task_manager.build_pending_tasks_message(self.agent.prompts)
         if pending_tasks_msg:
-            self.conversation.add_system_message(pending_tasks_msg)
+            self.conversation.add_user_message(pending_tasks_msg)
 
         try:
             # Call LLM
@@ -516,6 +624,10 @@ class AgentOrchestrator:
             self.agent.prompts.get_log_message('tool_calls_detected', count=len(tool_calls))
         )
 
+        # Add assistant message first (it was generated before any error detection)
+        self.conversation.add_assistant_message(response)
+        self._save()
+
         # Handle parse errors - notify agent about malformed tool calls
         valid_tool_calls = []
         for tool_call in tool_calls:
@@ -530,10 +642,6 @@ class AgentOrchestrator:
 
         # Categorize valid tool calls
         end_session_call, sync_calls, async_calls, wait_for_all_finished_requested = self.tool_handler.categorize_tool_calls(valid_tool_calls)
-
-        # Add assistant message
-        self.conversation.add_assistant_message(response)
-        self._save()
 
         # Execute sync calls
         if sync_calls:
@@ -559,7 +667,7 @@ class AgentOrchestrator:
 
             if has_outstanding:
                 self._waiting_for_all_results = True
-                self.conversation.add_system_message(
+                self.conversation.add_user_message(
                     self.agent.prompts.get_runtime_message('wait_for_async_acknowledged')
                 )
                 self._save()
@@ -567,7 +675,7 @@ class AgentOrchestrator:
                 return response, False, False
             else:
                 # No outstanding tasks - treat as no-op
-                self.conversation.add_system_message(
+                self.conversation.add_user_message(
                     self.agent.prompts.get_runtime_message('wait_for_async_no_tasks')
                 )
                 self._save()
@@ -619,7 +727,12 @@ class AgentOrchestrator:
                 self.agent.prompts.get_log_message('tool_result_log', result=result_preview)
             )
 
-            self.conversation.add_tool_result(tool_call['tool_name'], result)
+            self.conversation.add_tool_result(
+                tool_call['tool_name'],
+                tool_call['parameters'],
+                result,
+                include_input=tool_call.get('include_call_params_in_response', False),
+            )
             self._save()
 
     async def _launch_async_calls(self, async_calls: List[Dict[str, Any]]) -> List[str]:
@@ -644,7 +757,8 @@ class AgentOrchestrator:
                 task_id,
                 tool_call['tool_name'],
                 tool_call['parameters'],
-                self.agent._execute_tool
+                self.agent._execute_tool,
+                include_call_params_in_response=tool_call.get('include_call_params_in_response', False),
             )
             task_ids.append(task_id)
 
@@ -736,7 +850,7 @@ class AgentOrchestrator:
         while await self.task_manager.has_outstanding_tasks():
             task_result = await self.task_manager.wait_for_result(timeout=None)
             if task_result:
-                task_id, result = task_result
+                task_id, result, task_info = task_result
                 self.agent._log(
                     self.agent.prompts.get_log_message('task_completed_log', task_id=task_id)
                 )
@@ -746,7 +860,7 @@ class AgentOrchestrator:
                 )
                 await self.task_manager.remove_task(task_id)
                 await self.task_manager.mark_task_processed()
-                results.append((task_id, result))
+                results.append((task_id, result, task_info))
 
         # Deliver batch results
         if results and not session_ended:
@@ -775,7 +889,9 @@ class AgentOrchestrator:
             # No calls executed (shouldn't happen)
             return False
 
-    async def wait_for_task_result(self, has_pending: bool, should_continue: bool) -> Optional[Tuple[str, str]]:
+    async def wait_for_task_result(
+        self, has_pending: bool, should_continue: bool
+    ) -> Optional[Tuple[str, str, Dict[str, Any]]]:
         """
         Wait for a task result if needed.
 
@@ -790,7 +906,7 @@ class AgentOrchestrator:
             should_continue: Whether agent wants to continue generating
 
         Returns:
-            Tuple of (task_id, result) or None
+            Tuple of (task_id, result, task_info) or None
         """
         # First check if there are results waiting in the queue
         # This handles the case where tasks completed faster than we could process
@@ -814,7 +930,8 @@ class AgentOrchestrator:
         self,
         task_id: str,
         result: str,
-        session_ended: bool
+        task_info: Optional[Dict[str, Any]] = None,
+        session_ended: bool = False,
     ) -> bool:
         """
         Process a completed task result.
@@ -822,6 +939,9 @@ class AgentOrchestrator:
         Args:
             task_id: Task identifier
             result: Task result
+            task_info: Metadata captured at launch time (tool_name,
+                parameters, include_call_params_in_response). Used to format
+                the completion message.
             session_ended: Whether session has ended
 
         Returns:
@@ -838,7 +958,7 @@ class AgentOrchestrator:
 
         # Add to conversation if session not ended
         if not session_ended:
-            self.conversation.add_task_completed(task_id, result)
+            self.conversation.add_task_completed(task_id, result, task_info)
             self._save()
 
         # Remove from pending and mark as processed
@@ -868,7 +988,7 @@ class AgentOrchestrator:
         drained_count = 0
         while not self.task_manager.completed_results.empty():
             try:
-                task_id, result = self.task_manager.completed_results.get_nowait()
+                task_id, result, _task_info = self.task_manager.completed_results.get_nowait()
                 await self.task_manager.mark_task_processed()
                 drained_count += 1
                 self.agent._log(

@@ -13,7 +13,24 @@ class CalculatorTool(BaseTool):
 
     @property
     def description(self) -> str:
-        return "Performs basic arithmetic operations. Use exact operation names: 'add', 'subtract', 'multiply', 'divide'"
+        return (
+            "Performs basic arithmetic operations. Use exact operation names: "
+            "'add', 'subtract', 'multiply', 'divide'. "
+            "MANDATORY: You MUST call this tool with the <include_call_params_in_response /> "
+            "flag. Results are short numbers and it is easy to lose track of "
+            "which result belongs to which call when you issue several "
+            "calculations in one response. Echoing the input parameters back "
+            "alongside the result removes that ambiguity at a negligible "
+            "token cost. "
+            "Example usage:\n"
+            "<tool_call>\n"
+            "  <tool_name>calculator</tool_name>\n"
+            "  <include_call_params_in_response />\n"
+            "  <parameters>\n"
+            "    {\"operation\": \"add\", \"a\": 10, \"b\": 5}\n"
+            "  </parameters>\n"
+            "</tool_call>"
+        )
 
     def get_parameters_schema(self):
         """Provide detailed parameter descriptions."""

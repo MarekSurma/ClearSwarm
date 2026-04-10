@@ -408,6 +408,9 @@ class TestAgentAsync:
             # Wait for task to complete
             result = await task_manager.wait_for_result(timeout=1.0)
             assert result is not None
-            completed_task_id, result_text = result
+            completed_task_id, result_text, task_info = result
             assert completed_task_id == task_id
             assert result_text == "Tool result"
+            assert task_info["tool_name"] == "test_tool"
+            assert task_info["parameters"] == {"param": "value"}
+            assert task_info["include_call_params_in_response"] is False

@@ -160,6 +160,100 @@ class TestToolCallHandler:
         assert calls[0]['tool_name'] == 'search'
         assert calls[0]['wait_for_all_finished'] is True
 
+    def test_extract_include_input_absent_defaults_false(self):
+        """When the tag is missing, the flag defaults to False."""
+        text = '''
+<tool_call>
+<tool_name>calculator</tool_name>
+<parameters>{"a": 1}</parameters>
+</tool_call>
+'''
+        handler = ToolCallHandler()
+        calls = handler.extract_all_tool_calls(text)
+
+        assert len(calls) == 1
+        assert calls[0]['include_call_params_in_response'] is False
+
+    def test_extract_include_input_self_closing(self):
+        """Self-closing form <include_call_params_in_response /> enables the flag."""
+        text = '''
+<tool_call>
+<tool_name>calculator</tool_name>
+<include_call_params_in_response />
+<parameters>{"a": 1}</parameters>
+</tool_call>
+'''
+        handler = ToolCallHandler()
+        calls = handler.extract_all_tool_calls(text)
+
+        assert len(calls) == 1
+        assert calls[0]['include_call_params_in_response'] is True
+
+    def test_extract_include_input_self_closing_no_space(self):
+        """Self-closing without whitespace <include_call_params_in_response/> also works."""
+        text = '''
+<tool_call>
+<tool_name>calculator</tool_name>
+<include_call_params_in_response/>
+<parameters>{"a": 1}</parameters>
+</tool_call>
+'''
+        handler = ToolCallHandler()
+        calls = handler.extract_all_tool_calls(text)
+
+        assert len(calls) == 1
+        assert calls[0]['include_call_params_in_response'] is True
+
+    def test_extract_include_input_explicit_true(self):
+        """Open/close form with 'true' enables the flag."""
+        text = '''
+<tool_call>
+<tool_name>calculator</tool_name>
+<include_call_params_in_response>true</include_call_params_in_response>
+<parameters>{"a": 1}</parameters>
+</tool_call>
+'''
+        handler = ToolCallHandler()
+        calls = handler.extract_all_tool_calls(text)
+
+        assert len(calls) == 1
+        assert calls[0]['include_call_params_in_response'] is True
+
+    def test_extract_include_input_explicit_false(self):
+        """Open/close form with 'false' leaves the flag off."""
+        text = '''
+<tool_call>
+<tool_name>calculator</tool_name>
+<include_call_params_in_response>false</include_call_params_in_response>
+<parameters>{"a": 1}</parameters>
+</tool_call>
+'''
+        handler = ToolCallHandler()
+        calls = handler.extract_all_tool_calls(text)
+
+        assert len(calls) == 1
+        assert calls[0]['include_call_params_in_response'] is False
+
+    def test_extract_include_input_per_call_in_mixed_batch(self):
+        """Two tool calls, each with its own include_call_params_in_response setting."""
+        text = '''
+<tool_call>
+<tool_name>calculator</tool_name>
+<include_call_params_in_response />
+<parameters>{"a": 2, "b": 5}</parameters>
+</tool_call>
+<tool_call>
+<tool_name>calculator</tool_name>
+<parameters>{"a": 4, "b": 2}</parameters>
+</tool_call>
+'''
+        handler = ToolCallHandler()
+        calls = handler.extract_all_tool_calls(text)
+
+        assert len(calls) == 2
+        assert calls[0]['include_call_params_in_response'] is True
+        assert calls[1]['include_call_params_in_response'] is False
+
     def test_extract_text_before_end_session(self):
         """Test extracting text before end_session call."""
         response = '''Here is the result.
@@ -341,14 +435,14 @@ class TestConversationManager:
         assert messages[0]['role'] == 'system'
         assert messages[0]['content'] == 'System notification'
 
-    def test_add_tool_result(self):
-        """Test adding tool result."""
+    def test_add_tool_result_without_include_input(self):
+        """Test adding tool result without echoing parameters."""
         messages = []
         prompts = Mock()
         prompts.get_runtime_message.return_value = "Tool result: Success"
 
         manager = ConversationManager(messages, prompts)
-        manager.add_tool_result("calculator", "42")
+        manager.add_tool_result("calculator", {"op": "add"}, "42")
 
         assert len(messages) == 1
         assert messages[0]['role'] == 'user'
@@ -358,19 +452,67 @@ class TestConversationManager:
             result='42'
         )
 
-    def test_add_task_completed(self):
-        """Test adding task completion message."""
+    def test_add_tool_result_with_include_input(self):
+        """Test adding tool result with parameters echoed back."""
+        messages = []
+        prompts = Mock()
+        prompts.get_runtime_message.return_value = "Tool result with params"
+
+        manager = ConversationManager(messages, prompts)
+        manager.add_tool_result(
+            "calculator", {"op": "add", "a": 1, "b": 2}, "42", include_input=True
+        )
+
+        assert len(messages) == 1
+        assert messages[0]['role'] == 'user'
+        prompts.get_runtime_message.assert_called_once_with(
+            'tool_result_with_input',
+            tool_name='calculator',
+            parameters='{"op": "add", "a": 1, "b": 2}',
+            result='42'
+        )
+
+    def test_add_task_completed_without_include_input(self):
+        """Test adding task completion message without echoing parameters."""
         messages = []
         prompts = Mock()
         prompts.get_runtime_message.return_value = "Task completed: calculator_1"
 
         manager = ConversationManager(messages, prompts)
-        manager.add_task_completed("calculator_1", "Result")
+        task_info = {
+            'tool_name': 'calculator',
+            'parameters': {'a': 1},
+            'include_call_params_in_response': False,
+        }
+        manager.add_task_completed("calculator_1", "Result", task_info)
 
         assert len(messages) == 1
         prompts.get_runtime_message.assert_called_once_with(
             'task_completed',
             task_id='calculator_1',
+            result='Result'
+        )
+
+    def test_add_task_completed_with_include_input(self):
+        """Test adding task completion message with parameters echoed back."""
+        messages = []
+        prompts = Mock()
+        prompts.get_runtime_message.return_value = "Task completed with input"
+
+        manager = ConversationManager(messages, prompts)
+        task_info = {
+            'tool_name': 'calculator',
+            'parameters': {'a': 1, 'b': 2},
+            'include_call_params_in_response': True,
+        }
+        manager.add_task_completed("calculator_1", "Result", task_info)
+
+        assert len(messages) == 1
+        prompts.get_runtime_message.assert_called_once_with(
+            'task_completed_with_input',
+            task_id='calculator_1',
+            tool_name='calculator',
+            parameters='{"a": 1, "b": 2}',
             result='Result'
         )
 
@@ -507,10 +649,16 @@ class TestAgentOrchestrator:
         await asyncio.sleep(0.01)
 
         # Process result
+        task_info = {
+            'tool_name': 'test_tool',
+            'parameters': {},
+            'include_call_params_in_response': False,
+        }
         should_continue = await orchestrator.process_task_result(
             task_id,
             "Result",
-            session_ended=False
+            task_info,
+            session_ended=False,
         )
 
         assert should_continue is True

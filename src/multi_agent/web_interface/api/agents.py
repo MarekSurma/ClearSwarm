@@ -8,7 +8,7 @@ from typing import List, Dict, Optional, Tuple
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from ...core.agent import AgentLoader
+from ...core.agent import AgentLoader, cancel_agent, cancel_all_agents
 from ...core.database import get_database
 from ...core.project import ProjectManager
 from ...core.prompts import PromptLoader
@@ -268,9 +268,13 @@ class StopAllResponse(BaseModel):
 async def stop_all_agents(project: str = Query("default")):
     """
     Stop all running agents in a project.
-    Cancels all tracked asyncio tasks and marks agents as completed in the database.
+    Signals per-agent cancellation events (to stop LLM streaming threads),
+    cancels tracked asyncio tasks, and marks agents as completed in the database.
     """
     from ...core.database import get_database
+
+    # Signal ALL registered agents to cancel (stops LLM threads)
+    cancel_all_agents()
 
     running_tasks = await _get_running_tasks()
     stopped_ids = []
@@ -327,10 +331,15 @@ async def stop_agents_by_root(root_id: str, project: str = Query("default")):
     # Get all agents in this tree
     tree_agent_ids = get_all_descendants(root_id, all_executions)
 
+    # Signal per-agent cancellation for ALL agents in the tree
+    # This stops LLM streaming threads even for sub-agents not tracked as asyncio tasks
+    for agent_id in tree_agent_ids:
+        cancel_agent(agent_id)
+
     running_tasks = await _get_running_tasks()
     stopped_ids = []
 
-    # Cancel tasks that belong to this tree
+    # Cancel asyncio tasks that belong to this tree
     for agent_id, task in running_tasks.items():
         if agent_id in tree_agent_ids and not task.done():
             task.cancel()

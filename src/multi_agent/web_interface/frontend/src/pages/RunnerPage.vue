@@ -18,6 +18,7 @@ const { currentProject } = useProject()
 
 const graphVisible = ref(false)
 const graphAgentId = ref<string | null>(null)
+let launchTimeout: ReturnType<typeof setTimeout> | null = null
 
 onMounted(async () => {
   await Promise.all([loadAgents(), loadExecutions()])
@@ -27,6 +28,10 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  if (launchTimeout) {
+    clearTimeout(launchTimeout)
+    launchTimeout = null
+  }
   stopAutoRefresh()
   disconnect()
 })
@@ -45,7 +50,8 @@ function openGraph(agentId: string) {
 }
 
 function onLaunched() {
-  setTimeout(() => loadExecutions(), 1000)
+  if (launchTimeout) clearTimeout(launchTimeout)
+  launchTimeout = setTimeout(() => loadExecutions(), 1000)
 }
 </script>
 

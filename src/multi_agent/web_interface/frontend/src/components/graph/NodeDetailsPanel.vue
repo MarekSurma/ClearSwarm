@@ -3,6 +3,7 @@ import { ref, watch, nextTick, computed } from 'vue'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import Dialog from 'primevue/dialog'
+import { useToast } from 'primevue/usetoast'
 import type { ExecutionLog, ToolExecution } from '@/types/execution'
 import { toDisplayName } from '@/utils/nameFormatting'
 
@@ -19,9 +20,56 @@ const emit = defineEmits<{
   clear: []
 }>()
 
+const toast = useToast()
 const scrollContainer = ref<HTMLDivElement | null>(null)
 const showQuestionModal = ref(false)
 const showAnswerModal = ref(false)
+
+function copyToClipboard(text: string) {
+  if (!text) return
+
+  const handleSuccess = () => {
+    toast.add({
+      severity: 'success',
+      summary: 'Copied',
+      detail: 'Content copied to clipboard',
+      life: 2000
+    })
+  }
+
+  // Modern clipboard API
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(handleSuccess).catch(err => {
+      console.error('Failed to copy using clipboard API:', err)
+      fallbackCopy(text, handleSuccess)
+    })
+  } else {
+    fallbackCopy(text, handleSuccess)
+  }
+}
+
+function fallbackCopy(text: string, onSuccess: () => void) {
+  const textArea = document.createElement('textarea')
+  textArea.value = text
+  
+  // Ensure textarea is not visible but part of the document
+  textArea.style.position = 'fixed'
+  textArea.style.left = '-9999px'
+  textArea.style.top = '0'
+  document.body.appendChild(textArea)
+  
+  textArea.focus()
+  textArea.select()
+  
+  try {
+    const successful = document.execCommand('copy')
+    if (successful) onSuccess()
+  } catch (err) {
+    console.error('Fallback copy failed:', err)
+  }
+  
+  document.body.removeChild(textArea)
+}
 
 // Scroll to top when the selected node changes
 watch(
@@ -228,11 +276,31 @@ function getRoleStyle(role: string) {
 
     <!-- Modals -->
     <Dialog v-model:visible="showQuestionModal" header="Question" modal :style="{ width: '60vw' }">
-      <pre class="full-text-modal">{{ initialQuestion }}</pre>
+      <div class="modal-content-wrapper">
+        <Button
+          icon="pi pi-copy"
+          class="copy-btn-overlay"
+          v-tooltip.left="'Copy to clipboard'"
+          text
+          rounded
+          @click="copyToClipboard(initialQuestion)"
+        />
+        <pre class="full-text-modal">{{ initialQuestion }}</pre>
+      </div>
     </Dialog>
 
     <Dialog v-model:visible="showAnswerModal" header="Answer" modal :style="{ width: '60vw' }">
-      <pre class="full-text-modal">{{ agentLog?.final_response }}</pre>
+      <div class="modal-content-wrapper">
+        <Button
+          icon="pi pi-copy"
+          class="copy-btn-overlay"
+          v-tooltip.left="'Copy to clipboard'"
+          text
+          rounded
+          @click="copyToClipboard(agentLog?.final_response || '')"
+        />
+        <pre class="full-text-modal">{{ agentLog?.final_response }}</pre>
+      </div>
     </Dialog>
   </div>
 </template>
@@ -477,11 +545,25 @@ function getRoleStyle(role: string) {
   border-color: var(--p-primary-300);
 }
 
+.modal-content-wrapper {
+  position: relative;
+}
+
+.copy-btn-overlay {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.7) !important;
+  backdrop-filter: blur(2px);
+}
+
 .full-text-modal {
   white-space: pre-wrap;
   word-wrap: break-word;
   background: var(--p-surface-50);
   padding: 1rem;
+  padding-right: 3rem;
   border-radius: 4px;
   font-family: inherit;
   margin: 0;

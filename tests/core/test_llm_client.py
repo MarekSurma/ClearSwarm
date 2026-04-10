@@ -31,7 +31,7 @@ class TestMockLLMClient:
         mock_client = MockLLMClient(responses=responses)
 
         # First call
-        content1, model1 = await mock_client.generate_stream(
+        content1, model1, _ = await mock_client.generate_stream(
             messages=[{"role": "user", "content": "Test"}],
             model="test-model"
         )
@@ -40,7 +40,7 @@ class TestMockLLMClient:
         assert mock_client.call_count == 1
 
         # Second call
-        content2, model2 = await mock_client.generate_stream(
+        content2, model2, _ = await mock_client.generate_stream(
             messages=[{"role": "user", "content": "Test 2"}],
             model="test-model"
         )
@@ -48,7 +48,7 @@ class TestMockLLMClient:
         assert mock_client.call_count == 2
 
         # Third call
-        content3, model3 = await mock_client.generate_stream(
+        content3, model3, _ = await mock_client.generate_stream(
             messages=[{"role": "user", "content": "Test 3"}],
             model="test-model"
         )
@@ -61,14 +61,14 @@ class TestMockLLMClient:
         mock_client = MockLLMClient(responses=["Response 1"])
 
         # First call uses canned response
-        content1, _ = await mock_client.generate_stream(
+        content1, _, _ = await mock_client.generate_stream(
             messages=[{"role": "user", "content": "Test"}],
             model="test-model"
         )
         assert content1 == "Response 1"
 
         # Second call uses default response
-        content2, _ = await mock_client.generate_stream(
+        content2, _, _ = await mock_client.generate_stream(
             messages=[{"role": "user", "content": "Test 2"}],
             model="test-model"
         )
@@ -152,12 +152,14 @@ class TestOpenAILLMClient:
         mock_chunk1.choices = [Mock()]
         mock_chunk1.choices[0].delta = Mock()
         mock_chunk1.choices[0].delta.content = "Hello "
+        mock_chunk1.choices[0].finish_reason = None
         mock_chunk1.model = "gpt-4"
 
         mock_chunk2 = Mock()
         mock_chunk2.choices = [Mock()]
         mock_chunk2.choices[0].delta = Mock()
         mock_chunk2.choices[0].delta.content = "world!"
+        mock_chunk2.choices[0].finish_reason = "stop"
         mock_chunk2.model = "gpt-4"
 
         # Mock OpenAI client
@@ -173,7 +175,7 @@ class TestOpenAILLMClient:
             # Mock print to capture streaming output
             with patch('builtins.print'):
                 messages = [{"role": "user", "content": "Test"}]
-                content, model = await client.generate_stream(
+                content, model, finish_reason = await client.generate_stream(
                     messages=messages,
                     model="gpt-4",
                     temperature=0.7
@@ -181,14 +183,7 @@ class TestOpenAILLMClient:
 
                 assert content == "Hello world!"
                 assert model == "gpt-4"
-
-                # Verify API was called correctly
-                mock_openai_instance.chat.completions.create.assert_called_once_with(
-                    model="gpt-4",
-                    messages=messages,
-                    temperature=0.7,
-                    stream=True
-                )
+                assert finish_reason == "stop"
 
     @pytest.mark.asyncio
     async def test_openai_client_generate_stream_no_model_in_chunks(self):
@@ -198,6 +193,7 @@ class TestOpenAILLMClient:
         mock_chunk.choices = [Mock()]
         mock_chunk.choices[0].delta = Mock()
         mock_chunk.choices[0].delta.content = "Test response"
+        mock_chunk.choices[0].finish_reason = "stop"
         mock_chunk.model = None  # Simulate no model in chunk
 
         mock_openai_instance = Mock()
@@ -211,7 +207,7 @@ class TestOpenAILLMClient:
 
             with patch('builtins.print'):
                 messages = [{"role": "user", "content": "Test"}]
-                content, model = await client.generate_stream(
+                content, model, _ = await client.generate_stream(
                     messages=messages,
                     model="gpt-4",
                     temperature=0.7

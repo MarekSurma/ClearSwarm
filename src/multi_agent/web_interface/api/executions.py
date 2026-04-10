@@ -489,6 +489,10 @@ def _build_graph(agent_id: str) -> Optional[GraphData]:
         invalid_response_count = exec_data.get('invalid_response_count', 0) or 0
         agent_error_count = tool_error_count + invalid_response_count
 
+        # Ensure agent shows as error if state is 'error' (e.g. LLM failure)
+        if current_state == 'error' and agent_error_count == 0:
+            agent_error_count = 1
+
         nodes.append(GraphNode(
             id=aid, label=label, group=group, color=color,
             shape='dot', size=size, is_running=is_running,

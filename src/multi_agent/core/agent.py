@@ -5,6 +5,7 @@ Handles agent loading, execution, and LLM interaction.
 import asyncio
 import json
 import re
+import threading
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from datetime import datetime
@@ -16,6 +17,34 @@ from .orchestrator import AgentOrchestrator
 from .llm_client import LLMClient, OpenAILLMClient
 from ..tools.loader import ToolLoader
 from ..tools.base import BaseTool
+
+
+# Global registry of per-agent cancellation events.
+# Each running Agent registers its threading.Event here so that the
+# stop-agent API can signal individual agents (and their LLM threads)
+# to abort without requiring a full application shutdown.
+_agent_cancel_events: Dict[str, threading.Event] = {}
+_cancel_events_lock = threading.Lock()
+
+
+def cancel_agent(agent_id: str) -> bool:
+    """Signal an agent to cancel by setting its cancellation event.
+
+    Returns True if the agent was found in the registry.
+    """
+    with _cancel_events_lock:
+        event = _agent_cancel_events.get(agent_id)
+        if event:
+            event.set()
+            return True
+        return False
+
+
+def cancel_all_agents():
+    """Signal all registered agents to cancel."""
+    with _cancel_events_lock:
+        for event in _agent_cancel_events.values():
+            event.set()
 
 
 
@@ -102,6 +131,9 @@ class Agent:
         else:
             self.llm_client = llm_client
 
+        # Per-agent cancellation event (checked by LLM streaming threads)
+        self._cancel_event = threading.Event()
+
         # Track execution in database
         self.db = get_database()
         self.agent_id = self.db.create_agent_execution(
@@ -111,6 +143,10 @@ class Agent:
             call_mode=call_mode,
             project_dir=project_dir
         )
+
+        # Register cancel event in global registry
+        with _cancel_events_lock:
+            _agent_cancel_events[self.agent_id] = self._cancel_event
 
         # Conversation history
         self.messages: List[Dict[str, str]] = []
@@ -235,6 +271,8 @@ class Agent:
         llm_should_continue = True
         session_ended = False
 
+        was_cancelled = False
+
         try:
             self._log(self.prompts.get_log_message('agent_start_separator'))
             self._log(self.prompts.get_log_message('agent_start', agent_name=self.config.name, agent_id=self.agent_id))
@@ -242,6 +280,13 @@ class Agent:
             self._log(self.prompts.get_log_message('agent_start_separator'))
 
             while iterations < max_iterations and not session_ended:
+                # Check per-agent cancellation before each iteration
+                if self._cancel_event.is_set():
+                    self._log("Agent cancelled by user", "WARNING")
+                    final_response = "Agent was cancelled by user."
+                    was_cancelled = True
+                    break
+
                 # Generate response if needed
                 if llm_should_continue:
                     iterations += 1
@@ -261,11 +306,12 @@ class Agent:
                 task_result = await orchestrator.wait_for_task_result(has_pending, llm_should_continue)
 
                 if task_result:
-                    task_id, result = task_result
+                    task_id, result, task_info = task_result
                     llm_should_continue = await orchestrator.process_task_result(
                         task_id,
                         result,
-                        session_ended
+                        task_info,
+                        session_ended,
                     )
                 elif not has_pending and not llm_should_continue:
                     # No pending tasks and LLM doesn't want to continue
@@ -275,11 +321,13 @@ class Agent:
                     else:
                         break
 
-            # Wait for remaining tasks
-            await orchestrator.wait_for_remaining_tasks()
+            if not was_cancelled:
+                # Wait for remaining tasks
+                await orchestrator.wait_for_remaining_tasks()
 
-            if not session_ended and iterations >= max_iterations:
-                self._log(self.prompts.get_log_message('warning_max_iterations'), "WARNING")
+                if not session_ended and iterations >= max_iterations:
+                    self._log(self.prompts.get_log_message('warning_max_iterations'), "WARNING")
+                    final_response = self.prompts.get_error_message('agent_failed_to_finish')
 
             self._log(self.prompts.get_log_message('agent_completed_separator'))
             self._log(self.prompts.get_log_message('agent_completed', iterations=iterations))
@@ -288,41 +336,55 @@ class Agent:
 
             return final_response
 
+        except asyncio.CancelledError:
+            self._log("Agent cancelled (asyncio task cancelled)", "WARNING")
+            was_cancelled = True
+            final_response = "Agent was cancelled."
+
+            # Cancel any pending async sub-tasks in the orchestrator
+            remaining = await orchestrator.task_manager.get_remaining_tasks()
+            for task in remaining:
+                task.cancel()
+
+            return final_response
+
         except Exception as e:
             error_msg = f"Agent execution failed with error: {str(e)}"
             self._log(error_msg, "ERROR")
             import traceback
             traceback.print_exc()
-            
-            # Update final response to include error for UI
-            final_response = error_msg
-            
-            # Save error message to conversation for logging
+
+            # Save error details to conversation for debugging in logs
             self.messages.append({
-                "role": "system",
+                "role": "user",
                 "content": f"CRITICAL ERROR: {str(e)}",
                 "timestamp": datetime.now().isoformat()
             })
-            
+
+            # Return a clean, actionable message for the parent agent
+            final_response = self.prompts.get_error_message('agent_failed_to_finish')
+
             return final_response
 
         finally:
-            # Mark agent as completed in database (use 'error' state if failed)
-            final_state = 'completed'
-            
-            # Use sys.exc_info() or check if an error message was generated
-            import sys
-            exc_type, _, _ = sys.exc_info()
-            
-            if exc_type is not None or (not session_ended and iterations >= max_iterations):
-                if exc_type is not None:
-                    final_state = 'error'
-                else:
-                    # Max iterations reached without session_ended_explicitly
-                    final_state = 'completed' # Or 'warning'? keeping as completed for now but maybe mark as error if we want it red
-            
-            if session_ended:
+            # Unregister cancel event from global registry
+            with _cancel_events_lock:
+                _agent_cancel_events.pop(self.agent_id, None)
+
+            # Mark agent as completed in database
+            if was_cancelled:
+                final_state = 'cancelled'
+            else:
                 final_state = 'completed'
+
+                import sys
+                exc_type, _, _ = sys.exc_info()
+
+                if exc_type is not None or (not session_ended and iterations >= max_iterations):
+                    final_state = 'error'
+
+                if session_ended:
+                    final_state = 'completed'
 
             self.db.complete_agent_execution(self.agent_id, final_response, state=final_state)
 
@@ -344,15 +406,21 @@ class Agent:
                 self._save_log_file(streaming_content=partial_content)
 
             # Use injected LLM client
-            response_content, response_model = await self.llm_client.generate_stream(
+            response_content, response_model, finish_reason = await self.llm_client.generate_stream(
                 messages=self.messages,
                 model=Config.OPENAI_MODEL,
                 temperature=0.7,
-                on_stream_update=_on_stream_update
+                on_stream_update=_on_stream_update,
+                cancel_event=self._cancel_event
             )
 
             if not response_content:
                 self._log(self.prompts.get_log_message('warning_empty_response'), "WARNING")
+
+            if finish_reason == "length":
+                print(f"[AGENT {self.config.name}] LLM response TRUNCATED "
+                      f"(finish_reason=length, {len(response_content)} chars). "
+                      f"max_tokens={Config.OPENAI_MAX_TOKENS}")
 
             # Save log incrementally for live monitoring
             # interactions will be populated from self.messages at save time
@@ -432,6 +500,10 @@ class Agent:
         Returns:
             Result of execution as string
         """
+        # Check if agent has been cancelled before executing any tool
+        if self._cancel_event.is_set():
+            return "Agent was cancelled - tool execution aborted."
+
         # Validate that tool is authorized for this agent
         # Built-in tools like 'end_session' are always allowed
         built_in_tools = ['end_session']

@@ -21,7 +21,9 @@ function mergeExecutions(incoming: AgentExecution[]) {
       existing &&
       existing.current_state === inc.current_state &&
       existing.is_running === inc.is_running &&
-      existing.completed_at === inc.completed_at
+      existing.completed_at === inc.completed_at &&
+      existing.question === inc.question &&
+      existing.final_response === inc.final_response
     ) {
       return existing // reuse existing reference — no reactivity trigger
     }

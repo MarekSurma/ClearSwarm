@@ -25,10 +25,10 @@ class PromptLoader:
             'tool_no_parameters': '  No parameters\n',
             'tool_parameter_line': '  - {param_name} ({param_type}){required}: {param_description}\n',
             'agent_description_template': '### {tool_name} (Agent)\n{description}\n\nParameters:\n  - message (string) (required): Message or query to send to the agent\n\n',
-            'tool_calling_format': '\n## Tool Calling Format\n\nTo call a tool or agent, use this XML format:\n<tool_call>\n<tool_name>name_of_tool</tool_name>\n<call_mode>synchronous|asynchronous</call_mode>\n<wait_for_all_finished>true|false</wait_for_all_finished>\n<parameters>\n{"param1": "value1"}\n</parameters>\n</tool_call>\n\n',
-            'execution_modes': '## Execution Modes\n\n**synchronous**: Tool executes immediately\n**asynchronous**: Tool runs in background\n**wait_for_all_finished**: If set to true for any asynchronous call in a response, the system will wait for ALL outstanding tasks to complete before giving you control again. Results will be delivered as a single batch.\n\n',
-            'tool_call_examples': 'EXAMPLES:\n\n<tool_call>\n<tool_name>calculator</tool_name>\n<parameters>\n{"operation": "add", "a": 5, "b": 3}\n</parameters>\n</tool_call>\n\n<tool_call>\n<tool_name>question_answerer</tool_name>\n<call_mode>asynchronous</call_mode>\n<wait_for_all_finished>true</wait_for_all_finished>\n<parameters>\n{"message": "What is the capital of France?"}\n</parameters>\n</tool_call>\n\n',
-            'critical_rules': 'CRITICAL RULES:\n- Use <tool_name> tags\n- Use <parameters> tags for JSON\n- <call_mode> is optional (defaults to synchronous)\n- <wait_for_all_finished> is optional (defaults to false)\n\n',
+            'tool_calling_format': '\n## Tool Calling Format\n\nIMPORTANT: You MUST use the EXACT XML format shown below. Do NOT use any other format.\nDo NOT use formats like <|tool_call>call:name{...}<tool_call|> or similar — they will be IGNORED.\nThe ONLY format the system can parse is this:\n\n<tool_call>\n<tool_name>name_of_tool</tool_name>\n<parameters>\n{"param1": "value1"}\n</parameters>\n</tool_call>\n\nOptional tags inside <tool_call>:\n- <call_mode>synchronous|asynchronous</call_mode> (defaults to synchronous)\n- <wait_for_all_finished>true|false</wait_for_all_finished> (defaults to false)\n- <include_call_params_in_response /> or <include_call_params_in_response>true</include_call_params_in_response> — when present, the result message you receive will include the parameters you passed. Use this when you make several calls to the SAME tool in one response and need to match results to calls.\n\n',
+            'execution_modes': '## Execution Modes\n\n**synchronous**: Tool executes immediately\n**asynchronous**: Tool runs in background\n**wait_for_all_finished**: If set to true for any asynchronous call in a response, the system will wait for ALL outstanding tasks to complete before giving you control again. Results will be delivered as a single batch.\n**include_call_params_in_response**: Optional flag that echoes your input parameters back in the tool result message, so you can tell several calls to the same tool apart. Only use it when needed — it adds tokens to the result.\n\n',
+            'tool_call_examples': 'EXAMPLES:\n\n<tool_call>\n<tool_name>calculator</tool_name>\n<parameters>\n{"operation": "add", "a": 5, "b": 3}\n</parameters>\n</tool_call>\n\n<tool_call>\n<tool_name>question_answerer</tool_name>\n<call_mode>asynchronous</call_mode>\n<wait_for_all_finished>true</wait_for_all_finished>\n<parameters>\n{"message": "What is the capital of France?"}\n</parameters>\n</tool_call>\n\nExample — two calls to the same tool with include_call_params_in_response so results are unambiguous:\n\n<tool_call>\n<tool_name>calculator</tool_name>\n<include_call_params_in_response />\n<parameters>\n{"operation": "add", "a": 2, "b": 5}\n</parameters>\n</tool_call>\n<tool_call>\n<tool_name>calculator</tool_name>\n<include_call_params_in_response />\n<parameters>\n{"operation": "add", "a": 4, "b": 2}\n</parameters>\n</tool_call>\n\n',
+            'critical_rules': 'CRITICAL RULES:\n- NEVER use <|tool_call>call:name{...}<tool_call|> format — it DOES NOT WORK\n- ALWAYS wrap every tool call in <tool_call>...</tool_call> tags\n- ALWAYS use <tool_name>...</tool_name> for the tool name\n- ALWAYS use <parameters>...</parameters> with a valid JSON object (double quotes)\n- <call_mode> is optional (defaults to synchronous)\n- <wait_for_all_finished> is optional (defaults to false)\n- <include_call_params_in_response> is optional — only add it when you need the system to echo your parameters back alongside the result (e.g. to disambiguate several calls to the same tool). Accepts self-closing form <include_call_params_in_response /> or <include_call_params_in_response>true</include_call_params_in_response>.\n\n',
             'task_management': '## Task Management\n\nEach tool call gets a unique TASK ID. Do not create duplicate tasks.\n\n',
             'end_session_rules': '## CRITICAL: When to Call end_session\n\nYOU MUST NOT call end_session if there are pending tasks!\n\n'
         },
@@ -41,9 +41,12 @@ class PromptLoader:
             'wait_for_async_no_tasks': 'Note: wait_for_all_finished was requested, but there are no outstanding async tasks.\n',
             'all_tasks_completed_batch_header': 'All {task_count} async task(s) have completed. Results:\n\n',
             'all_tasks_completed_batch_item': "--- Task '{task_id}' result ---\n{result}\n\n",
+            'all_tasks_completed_batch_item_with_input': "--- Task '{task_id}' ({tool_name} called with parameters {parameters}) result ---\n{result}\n\n",
             'task_completed': "Task '{task_id}' completed:\n{result}",
+            'task_completed_with_input': "Task '{task_id}' ({tool_name} called with parameters {parameters}) completed:\n{result}",
             'tool_result': "Tool '{tool_name}' result:\n{result}",
-            'no_tool_call_warning': 'SYSTEM REMINDER: You must call end_session to terminate.\n\n<tool_call>\n<tool_name>end_session</tool_name>\n<parameters>\n{"final_message": "Your response"}\n</parameters>\n</tool_call>\n',
+            'tool_result_with_input': "Tool '{tool_name}' called with parameters {parameters} returned:\n{result}",
+            'no_tool_call_warning': 'SYSTEM ERROR: No valid tool call detected! Do NOT use <|tool_call>call:name{...}<tool_call|> format — it does not work.\n\nYou MUST use this EXACT format:\n<tool_call>\n<tool_name>end_session</tool_name>\n<parameters>\n{"final_message": "Your response"}\n</parameters>\n</tool_call>\n',
             'end_session_with_pending_tasks_error': 'Error: You called end_session with {pending_count} pending tasks!\n\nPending: {task_list}\n\nend_session call IGNORED.\n'
         },
         'log_messages': {
@@ -81,7 +84,8 @@ class PromptLoader:
             'tool_not_authorized': "SECURITY ERROR: Tool/agent '{tool_name}' is not authorized for agent '{agent_name}'. Authorized tools: {authorized_tools}. To use this tool, add it to the file: {tools_file}",
             'tool_not_found': "Error: Tool or agent '{tool_name}' not found",
             'tool_execution_error': "Error executing tool/agent '{tool_name}': {error_details}",
-            'llm_call_error': "Error calling LLM: {error_details}"
+            'llm_call_error': "Error calling LLM: {error_details}",
+            'agent_failed_to_finish': "This agent failed to finish its job. You either have to run a new one or ignore this situation."
         }
     }
 

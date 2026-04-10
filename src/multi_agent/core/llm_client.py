@@ -5,10 +5,13 @@ Provides abstraction layer for LLM API calls with dependency injection support.
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Tuple, Optional, Callable
 import asyncio
+import logging
 import threading
 import time
 from datetime import datetime
 from openai import OpenAI
+
+logger = logging.getLogger(__name__)
 
 from .config import Config
 
@@ -53,8 +56,9 @@ class LLMClient(ABC):
         messages: List[Dict[str, str]],
         model: str,
         temperature: float = 0.7,
-        on_stream_update: Optional[Callable[[str], None]] = None
-    ) -> Tuple[str, str]:
+        on_stream_update: Optional[Callable[[str], None]] = None,
+        cancel_event: Optional[threading.Event] = None
+    ) -> Tuple[str, str, Optional[str]]:
         """
         Generate a streaming response from the LLM.
 
@@ -63,9 +67,10 @@ class LLMClient(ABC):
             model: Model identifier
             temperature: Sampling temperature
             on_stream_update: Optional callback called periodically with partial content during streaming
+            cancel_event: Optional per-agent cancellation event; checked alongside global shutdown
 
         Returns:
-            Tuple of (response_content, model_used)
+            Tuple of (response_content, model_used, finish_reason)
         """
         pass
 
@@ -94,7 +99,8 @@ class OpenAILLMClient(LLMClient):
         messages: List[Dict[str, str]],
         model: str,
         temperature: float = 0.7,
-        on_stream_update: Optional[Callable[[str], None]] = None
+        on_stream_update: Optional[Callable[[str], None]] = None,
+        cancel_event: Optional[threading.Event] = None
     ) -> Tuple[str, str]:
         """
         Generate a streaming response from OpenAI API.
@@ -104,17 +110,29 @@ class OpenAILLMClient(LLMClient):
             model: Model identifier
             temperature: Sampling temperature
             on_stream_update: Optional callback called periodically with partial content during streaming
+            cancel_event: Optional per-agent cancellation event; checked alongside global shutdown
 
         Returns:
             Tuple of (response_content, model_used)
         """
         shutdown_event = get_shutdown_event()
 
+        def _should_stop():
+            """Check if streaming should stop (global shutdown or per-agent cancel)."""
+            return shutdown_event.is_set() or (cancel_event is not None and cancel_event.is_set())
+
         def _sync_stream_call():
+            # Check cancellation before starting the HTTP request
+            if _should_stop():
+                return "", None, "cancelled"
+
+            stream_start_time = time.time()
+
             stream = self.client.chat.completions.create(
                 model=model,
                 messages=messages,
                 temperature=temperature,
+                max_tokens=Config.OPENAI_MAX_TOKENS,
                 stream=True,
                 timeout=Config.OPENAI_API_TIMEOUT
             )
@@ -122,20 +140,29 @@ class OpenAILLMClient(LLMClient):
             # Collect streamed response
             response_content = ""
             response_model = None
+            finish_reason = None
             last_update_time = time.time()
+            chunk_count = 0
 
             try:
                 for chunk in stream:
-                    # Check for shutdown request
-                    if shutdown_event.is_set():
+                    chunk_count += 1
+                    # Check for shutdown or per-agent cancellation
+                    if _should_stop():
                         stream.close()
+                        finish_reason = "cancelled"
                         break
 
                     if chunk.choices and len(chunk.choices) > 0:
-                        delta = chunk.choices[0].delta
+                        choice = chunk.choices[0]
+                        delta = choice.delta
                         if hasattr(delta, 'content') and delta.content:
                             content = delta.content
                             response_content += content
+
+                        # Track finish reason from the final chunk
+                        if hasattr(choice, 'finish_reason') and choice.finish_reason:
+                            finish_reason = choice.finish_reason
 
                     # Save model info from first chunk
                     if not response_model and hasattr(chunk, 'model'):
@@ -147,19 +174,42 @@ class OpenAILLMClient(LLMClient):
                         on_stream_update(response_content)
                         last_update_time = now
 
-                pass  # Streaming complete
             except Exception as e:
-                if shutdown_event.is_set():
-                    pass  # Streaming interrupted by shutdown
+                if _should_stop():
+                    finish_reason = "cancelled"
                 else:
+                    elapsed = time.time() - stream_start_time
+                    logger.error(
+                        "LLM streaming error after %.1fs, %d chunks, %d chars: %s",
+                        elapsed, chunk_count, len(response_content), str(e)
+                    )
+                    print(f"[LLM ERROR] Streaming failed after {elapsed:.1f}s, "
+                          f"{chunk_count} chunks, {len(response_content)} chars: {e}",
+                          flush=True)
                     raise
 
-            return response_content, response_model
+            elapsed = time.time() - stream_start_time
+            print(f"[LLM STREAM] model={response_model or model} "
+                  f"finish_reason={finish_reason} "
+                  f"chars={len(response_content)} chunks={chunk_count} "
+                  f"time={elapsed:.1f}s max_tokens={Config.OPENAI_MAX_TOKENS}",
+                  flush=True)
+
+            if finish_reason == "length":
+                print(f"[LLM WARNING] Response TRUNCATED! finish_reason=length, "
+                      f"chars={len(response_content)}, max_tokens={Config.OPENAI_MAX_TOKENS}",
+                      flush=True)
+            elif finish_reason is None and response_content:
+                print(f"[LLM WARNING] No finish_reason received! "
+                      f"Response may be incomplete. chars={len(response_content)}",
+                      flush=True)
+
+            return response_content, response_model, finish_reason
 
         # Run in thread pool to avoid blocking event loop
-        response_content, response_model = await asyncio.to_thread(_sync_stream_call)
+        response_content, response_model, finish_reason = await asyncio.to_thread(_sync_stream_call)
 
-        return response_content, response_model or model
+        return response_content, response_model or model, finish_reason
 
 
 class MockLLMClient(LLMClient):
@@ -181,8 +231,9 @@ class MockLLMClient(LLMClient):
         messages: List[Dict[str, str]],
         model: str,
         temperature: float = 0.7,
-        on_stream_update: Optional[Callable[[str], None]] = None
-    ) -> Tuple[str, str]:
+        on_stream_update: Optional[Callable[[str], None]] = None,
+        cancel_event: Optional[threading.Event] = None
+    ) -> Tuple[str, str, Optional[str]]:
         """
         Return a mock response.
 
@@ -191,9 +242,10 @@ class MockLLMClient(LLMClient):
             model: Model identifier
             temperature: Sampling temperature
             on_stream_update: Optional callback (unused in mock)
+            cancel_event: Optional cancellation event (unused in mock)
 
         Returns:
-            Tuple of (response_content, model_used)
+            Tuple of (response_content, model_used, finish_reason)
         """
         # Record call
         self.call_history.append({
@@ -210,7 +262,7 @@ class MockLLMClient(LLMClient):
             response = f"Mock response {self.call_count + 1}"
 
         self.call_count += 1
-        return response, model
+        return response, model, "stop"
 
     def reset(self):
         """Reset mock state."""

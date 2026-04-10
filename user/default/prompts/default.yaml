@@ -17,7 +17,7 @@ system_prompts:
   # Header for available tools section
   available_tools_header: |
 
-    ## Available Tools
+    ## Authorized Tools
 
     You have access to the following tools:
 
@@ -50,16 +50,25 @@ system_prompts:
 
     ## Tool Calling Format
 
-    To call a tool or agent, you MUST use this EXACT XML format:
+    IMPORTANT: You MUST use the EXACT XML format shown below. Do NOT use any other format.
+    Do NOT use formats like <|tool_call>call:name{...}<tool_call|> or similar — they will be IGNORED by the system.
+    The ONLY format the system can parse is this:
 
     <tool_call>
     <tool_name>name_of_tool</tool_name>
-    <call_mode>synchronous|asynchronous</call_mode>  <!-- OPTIONAL: defaults to 'synchronous' -->
-    <wait_for_all_finished>true|false</wait_for_all_finished> <!-- OPTIONAL: defaults to 'false' -->
     <parameters>
     {"param1": "value1", "param2": "value2"}
     </parameters>
     </tool_call>
+
+    Optional tags (can be added inside <tool_call> if needed):
+    - <call_mode>synchronous|asynchronous</call_mode> (defaults to 'synchronous')
+    - <wait_for_all_finished>true|false</wait_for_all_finished> (defaults to 'false')
+    - <include_call_params_in_response /> or <include_call_params_in_response>true</include_call_params_in_response>
+      (defaults to 'false'). When present, the result message delivered back to you will
+      include the parameters you passed at call time — use this when you make several
+      calls to the SAME tool in one response and need to match results to calls. Do NOT
+      enable this blindly — it adds tokens to every result.
 
 
   # Execution modes explanation
@@ -83,44 +92,65 @@ system_prompts:
     - Results will be delivered as a single batch message.
     - Use when you want to run multiple tasks in parallel but need all their results before your next decision.
 
+    **include_call_params_in_response**:
+    - Optional per-call flag. When enabled, the result message you receive will be prefixed with the parameters you passed at call time.
+    - Use this ONLY when needed to disambiguate: e.g. when you make several calls to the same tool in one response with different parameters and need to tell which result corresponds to which call.
+    - Do NOT enable it blindly — if your parameters are large (long text, file contents, etc.) this can waste a lot of tokens. Leave it off whenever the results are unambiguous on their own.
+
 
   # Examples of tool calls
   tool_call_examples: |
-    EXAMPLES  - (this is NOT a list of tools that are available to you. Tools available to you are in the "Authorized tools" section):
+    EXAMPLES  - (this is NOT a list of tools that are available to you. Tools available to you are in the "Authorized Tools" section):
 
-    Example 1 - Synchronous calculator (need result immediately):
+    Example 1 - Synchronous floor mop (need result immediately):
     <tool_call>
-    <tool_name>calculator</tool_name>
+    <tool_name>floor_mop</tool_name>
     <call_mode>synchronous</call_mode>
     <parameters>
-    {"operation": "add", "a": 5, "b": 3}
+    {"floor_number": "5"}
     </parameters>
     </tool_call>
 
-    Example 2 - Asynchronous agent (can run in parallel):
+    Example 2 - Asynchronous light switch (can run in parallel):
     <tool_call>
-    <tool_name>researcher</tool_name>
+    <tool_name>light_switch</tool_name>
     <call_mode>asynchronous</call_mode>
     <parameters>
-    {"message": "Research topic A"}
+        {"operation": "on"}
     </parameters>
     </tool_call>
 
     Example 3 - Asynchronous calls with wait (parallel execution, batch results):
     <tool_call>
-    <tool_name>question_answerer</tool_name>
+    <tool_name>floor_mop</tool_name>
     <call_mode>asynchronous</call_mode>
     <wait_for_all_finished>true</wait_for_all_finished>
     <parameters>
-    {"message": "Query 1"}
+    {"floor_number": "1"}
     </parameters>
     </tool_call>
     <tool_call>
-    <tool_name>question_answerer</tool_name>
+    <tool_name>floor_mop</tool_name>
     <call_mode>asynchronous</call_mode>
     <wait_for_all_finished>true</wait_for_all_finished>
     <parameters>
-    {"message": "Query 2"}
+    {"floor_number": "2"}
+    </parameters>
+    </tool_call>
+
+    Example 4 - Two calls to the same tool with include_call_params_in_response so you can tell the results apart:
+    <tool_call>
+    <tool_name>calculator</tool_name>
+    <include_call_params_in_response />
+    <parameters>
+    {"operation": "add", "a": 2, "b": 5}
+    </parameters>
+    </tool_call>
+    <tool_call>
+    <tool_name>calculator</tool_name>
+    <include_call_params_in_response />
+    <parameters>
+    {"operation": "add", "a": 4, "b": 2}
     </parameters>
     </tool_call>
 
@@ -128,14 +158,23 @@ system_prompts:
   # Critical rules for tool calling
   critical_rules: |
     CRITICAL RULES:
-    - ALWAYS use <tool_name>...</tool_name> tags (NOT custom tags like <calculator> or <math_assistant>)
-    - ALWAYS use <parameters>...</parameters> tags for the JSON
+    - NEVER use <|tool_call>call:tool_name{...}<tool_call|> format. It DOES NOT WORK. The system will not recognize it.
+    - ALWAYS wrap every tool call in <tool_call>...</tool_call> tags
+    - ALWAYS use <tool_name>...</tool_name> inside to specify the tool (NOT custom tags like <calculator> or <math_assistant>)
+    - ALWAYS use <parameters>...</parameters> inside to pass a valid JSON object
+    - JSON must use double quotes for keys and string values: {"key": "value"} — not {key: value}
     - <call_mode> is OPTIONAL - omit it or use 'synchronous' as default
     - <wait_for_all_finished> is OPTIONAL - omit it or use 'false' as default
-    - The JSON must use EXACT parameter names as listed above
-    - For synchronous calls: results appear immediately in conversation
-    - For asynchronous calls: results arrive later via system notification (unless wait_for_all_finished is true)
+    - <include_call_params_in_response> is OPTIONAL - only add it when you need the result message to echo your parameters back (e.g. multiple calls to the same tool). Accepts <include_call_params_in_response /> (self-closing) or <include_call_params_in_response>true</include_call_params_in_response>.
     - You can mix synchronous and asynchronous calls in one response
+
+    REMEMBER: The ONLY way to call a tool is:
+    <tool_call>
+    <tool_name>tool_name_here</tool_name>
+    <parameters>
+    {"key": "value"}
+    </parameters>
+    </tool_call>
 
 
   # Task management instructions
@@ -162,7 +201,7 @@ system_prompts:
     {"final_message": "Here goes your final response to the user/caller"}
     </parameters>
     </tool_call>
-    
+
     ## CRITICAL: When to Call end_session
 
     **YOU MUST NOT call end_session if there are ANY pending asynchronous tasks!**
@@ -184,6 +223,7 @@ system_prompts:
 
     If you have pending tasks, you MUST wait for their results before calling end_session.
 
+    Anything that is returned outside of the final_message will NOT be passed to the user. Keep your response inside of the final_message parameter.
 
 # Runtime messages (system notifications during execution)
 runtime_messages:
@@ -215,14 +255,24 @@ runtime_messages:
   # Task completion notification
   task_completed: "Task '{task_id}' completed:\n{result}"
 
+  # Task completion notification with echoed input (used when include_call_params_in_response was set on the call)
+  task_completed_with_input: "Task '{task_id}' ({tool_name} called with parameters {parameters}) completed:\n{result}"
+
   # Tool result (for synchronous calls)
   tool_result: "Tool '{tool_name}' result:\n{result}"
 
+  # Tool result with echoed input (used when include_call_params_in_response was set on the call)
+  tool_result_with_input: "Tool '{tool_name}' called with parameters {parameters} returned:\n{result}"
+
   # Warning when no tool call detected
   no_tool_call_warning: |
-    SYSTEM REMINDER: You did not make any tool calls. If you have completed your task, you MUST call the 'end_session' tool to terminate.
+    SYSTEM ERROR: No valid tool call was detected in your response!
 
-    Use this EXACT format:
+    You probably used an INCORRECT format. The system CANNOT parse formats like:
+      <|tool_call>call:tool_name{...}<tool_call|>   ← WRONG, DOES NOT WORK
+      <tool_call>call:tool_name{...}</tool_call>     ← WRONG, DOES NOT WORK
+
+    You MUST use this EXACT XML format:
     <tool_call>
     <tool_name>end_session</tool_name>
     <parameters>
@@ -230,7 +280,8 @@ runtime_messages:
     </parameters>
     </tool_call>
 
-    If you still have work to do, continue with appropriate tool calls using the same XML format.
+    Note the structure: <tool_call> wraps everything, <tool_name> contains ONLY the tool name, <parameters> contains ONLY a JSON object.
+    If you still have work to do, use the same XML format to call any other tool.
 
   # Critical error when trying to end session with pending tasks
   end_session_with_pending_tasks_error: |
@@ -303,3 +354,6 @@ error_messages:
 
   # LLM call error
   llm_call_error: "Error calling LLM: {error_details}"
+
+  # Agent failed to finish (returned to parent agent as result)
+  agent_failed_to_finish: "This agent failed to finish its job. You either have to run a new one or ignore this situation."
