@@ -16,6 +16,7 @@ const emit = defineEmits<{
 
 defineExpose({
   buildGraph,
+  clearGraph,
   fitView,
   getParentAgents: (nodeId: string) => graph.getParentAgents(nodeId),
   addToolNode: (parent: string, tool: string) => graph.addToolNode(parent, tool),
@@ -205,6 +206,13 @@ function handleDrop(event: DragEvent) {
 
 function buildGraph(rootAgentName: string, allAgents: string[]) {
   graph.buildGraphForAgent(rootAgentName, allAgents)
+}
+
+function clearGraph() {
+  graph.clearGraph()
+  showRemoveBtn.value = false
+  showSelfLoopBtn.value = false
+  hoveredNodeId.value = null
 }
 
 function fitView() {

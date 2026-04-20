@@ -8,7 +8,7 @@ from typing import List, Dict, Optional, Tuple
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from ...core.agent import AgentLoader, cancel_agent, cancel_all_agents
+from ...core.agent import AgentLoader, cancel_agent
 from ...core.database import get_database
 from ...core.project import ProjectManager
 from ...core.prompts import PromptLoader
@@ -267,36 +267,39 @@ class StopAllResponse(BaseModel):
 @router.post("/agents/stop-all", response_model=StopAllResponse)
 async def stop_all_agents(project: str = Query("default")):
     """
-    Stop all running agents in a project.
+    Stop all running agents in the given project only.
     Signals per-agent cancellation events (to stop LLM streaming threads),
     cancels tracked asyncio tasks, and marks agents as completed in the database.
     """
     from ...core.database import get_database
 
-    # Signal ALL registered agents to cancel (stops LLM threads)
-    cancel_all_agents()
+    db = get_database()
+    project_executions = db.get_all_executions(project_dir=project)
+    project_agent_ids = {e['agent_id'] for e in project_executions}
+
+    # Signal per-agent cancellation only for agents in this project
+    for agent_id in project_agent_ids:
+        cancel_agent(agent_id)
 
     running_tasks = await _get_running_tasks()
     stopped_ids = []
 
     for agent_id, task in running_tasks.items():
-        if not task.done():
+        if agent_id in project_agent_ids and not task.done():
             task.cancel()
             stopped_ids.append(agent_id)
 
-    # Also mark any running agents in database as completed
-    db = get_database()
-    all_executions = db.get_all_executions(project_dir=project)
-
-    for exec_info in all_executions:
+    # Mark any still-running agents in this project as completed
+    for exec_info in project_executions:
         if exec_info['completed_at'] is None:
             db.complete_agent_execution(exec_info['agent_id'])
             if exec_info['agent_id'] not in stopped_ids:
                 stopped_ids.append(exec_info['agent_id'])
 
-    # Clear tracking
+    # Untrack only the tasks we stopped
     async with _tasks_lock:
-        _running_tasks.clear()
+        for agent_id in stopped_ids:
+            _running_tasks.pop(agent_id, None)
 
     return StopAllResponse(
         stopped_count=len(stopped_ids),

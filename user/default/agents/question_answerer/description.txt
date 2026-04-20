@@ -1,1 +1,1 @@
-A generic Grok question answering bot
+A generic question answering bot

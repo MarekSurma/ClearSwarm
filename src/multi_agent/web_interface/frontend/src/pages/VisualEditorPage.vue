@@ -34,9 +34,10 @@ onMounted(async () => {
 watch(
   () => currentProject.value.project_dir,
   async () => {
-    // Clear selection and reload
+    // Clear selection, graph, and reload
     selectedAgentName.value = null
     selectedNodeAgentDetail.value = null
+    graphCanvas.value?.clearGraph()
     await Promise.all([loadAgents(), loadTools()])
   }
 )
@@ -289,6 +290,7 @@ async function handleDeleteAgent(agentName: string) {
     if (selectedAgentName.value === agentName) {
       selectedAgentName.value = null
       selectedNodeAgentDetail.value = null
+      graphCanvas.value?.clearGraph()
     }
 
     await loadAgents()

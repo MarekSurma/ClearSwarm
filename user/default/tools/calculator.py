@@ -16,7 +16,7 @@ class CalculatorTool(BaseTool):
         return (
             "Performs basic arithmetic operations. Use exact operation names: "
             "'add', 'subtract', 'multiply', 'divide'. "
-            "MANDATORY: You MUST call this tool with the <include_call_params_in_response /> "
+            "MANDATORY: You MUST call this tool with the include_call_params_in_response "
             "flag. Results are short numbers and it is easy to lose track of "
             "which result belongs to which call when you issue several "
             "calculations in one response. Echoing the input parameters back "

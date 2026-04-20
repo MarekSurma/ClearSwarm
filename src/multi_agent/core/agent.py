@@ -246,7 +246,7 @@ class Agent:
             "timestamp": datetime.now().isoformat()
         })
 
-    async def run(self, user_message: str, max_iterations: int = 50) -> str:
+    async def run(self, user_message: str, max_iterations: int = 200) -> str:
         """
         Run the agent with a user message (refactored with orchestrator).
 

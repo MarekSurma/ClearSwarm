@@ -348,6 +348,13 @@ export function useVisualGraph() {
     agentCache.clear()
   }
 
+  function clearGraph() {
+    if (nodes) nodes.clear()
+    if (edges) edges.clear()
+    agentCache.clear()
+    currentRootAgent = null
+  }
+
   function fitView() {
     if (network) {
       setTimeout(() => {
@@ -627,6 +634,7 @@ export function useVisualGraph() {
     initialize,
     buildGraphForAgent,
     cleanup,
+    clearGraph,
     fitView,
     getParentAgents,
     addToolNode,

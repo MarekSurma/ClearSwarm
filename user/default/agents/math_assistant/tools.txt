@@ -1,2 +1,5 @@
 end_session
 calculator
+task_comment_add
+task_create
+task_pick_up_first_by_status
