@@ -258,21 +258,17 @@ def get_execution_log(agent_id: str):
 def delete_execution(agent_id: str):
     """Delete a single agent execution, all descendants, their tool executions, and log files."""
     db = get_database()
+
+    # Verify execution exists (separate call — delete_execution raises ValueError on missing)
     execution = db.get_agent_execution(agent_id)
     if not execution:
         raise HTTPException(status_code=404, detail=f"Execution '{agent_id}' not found")
 
-    # Don't allow deleting running executions
-    if execution['completed_at'] is None:
-        raise HTTPException(status_code=400, detail="Cannot delete a running execution")
-
-    # Delete from DB — returns log file paths of all deleted executions
-    log_files = db.delete_execution(agent_id)
-
-    # Also include the root execution's own log file
-    root_log = execution.get('log_file')
-    if root_log:
-        log_files.append(root_log)
+    try:
+        # Delete from DB — returns log file paths of all deleted executions (including root)
+        log_files = db.delete_execution(agent_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     # Remove log files from disk
     for log_file in log_files:

@@ -379,20 +379,43 @@ class AgentDatabase:
 
         Returns:
             List of log file paths that were associated with deleted executions.
+
+        Raises:
+            ValueError: If any execution in the tree is still running.
         """
         with self._get_connection() as conn:
             cursor = conn.cursor()
 
-            # BFS: collect all descendant IDs and their log files
+            # Verify root exists
+            cursor.execute(
+                "SELECT agent_id, log_file, completed_at FROM agent_executions WHERE agent_id = ?",
+                (agent_id,),
+            )
+            root = cursor.fetchone()
+            if not root:
+                raise ValueError(f"Execution '{agent_id}' not found")
+
+            # BFS: collect all descendants, their log files, and check running status
             log_files: List[str] = []
-            to_delete = [agent_id]
+            to_delete: List[str] = [agent_id]
+            if root[1]:
+                log_files.append(root[1])
+
+            # Check if root is still running
+            if root[2] is None:
+                raise ValueError(f"Cannot delete running execution '{agent_id}'")
+
             queue = [agent_id]
             while queue:
                 cursor.execute(
-                    "SELECT agent_id, log_file FROM agent_executions WHERE parent_agent_id = ?",
+                    "SELECT agent_id, log_file, completed_at FROM agent_executions WHERE parent_agent_id = ?",
                     (queue.pop(0),),
                 )
-                for child_id, log_file in cursor.fetchall():
+                for child_id, log_file, completed_at in cursor.fetchall():
+                    if completed_at is None:
+                        raise ValueError(
+                            f"Cannot delete — descendant execution '{child_id}' is still running"
+                        )
                     to_delete.append(child_id)
                     queue.append(child_id)
                     if log_file:
