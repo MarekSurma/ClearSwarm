@@ -88,6 +88,7 @@ function onLaunched() {
               :runningExecutions="runningExecutions"
               @view-graph="openGraph"
               @stopped="loadExecutions"
+              @deleted="loadExecutions"
             />
           </template>
         </Card>

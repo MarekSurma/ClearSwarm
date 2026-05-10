@@ -6,6 +6,7 @@ import Dialog from 'primevue/dialog'
 import { useToast } from 'primevue/usetoast'
 import type { AgentExecution } from '@/types/execution'
 import { toDisplayName } from '@/utils/nameFormatting'
+import { useApi } from '@/composables/useApi'
 
 const props = defineProps<{
   execution: AgentExecution
@@ -13,11 +14,25 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   viewGraph: [agentId: string]
+  deleted: [agentId: string]
 }>()
 
 const toast = useToast()
+const api = useApi()
 const showQuestionModal = ref(false)
 const showAnswerModal = ref(false)
+const showDeleteModal = ref(false)
+
+async function handleDelete() {
+  showDeleteModal.value = false
+  try {
+    await api.deleteExecution(props.execution.agent_id)
+    toast.add({ severity: 'success', summary: 'Deleted', detail: 'Execution removed', life: 2000 })
+    emit('deleted', props.execution.agent_id)
+  } catch (error: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: error.message, life: 5000 })
+  }
+}
 
 function copyToClipboard(text: string) {
   if (!text) return
@@ -102,7 +117,18 @@ const truncatedAnswer = computed(() => {
           &larr; {{ toDisplayName(execution.parent_agent_name) }}
         </span>
       </div>
-      <Tag :value="statusLabel" :severity="statusSeverity" />
+      <div class="status-actions">
+        <Tag :value="statusLabel" :severity="statusSeverity" />
+        <Button
+          v-if="!execution.is_running"
+          icon="pi pi-trash"
+          severity="danger"
+          size="small"
+          text
+          v-tooltip.bottom="'Delete execution'"
+          @click="showDeleteModal = true"
+        />
+      </div>
     </div>
 
     <div class="card-meta">
@@ -175,6 +201,24 @@ const truncatedAnswer = computed(() => {
         <pre class="full-text">{{ execution.final_response }}</pre>
       </div>
     </Dialog>
+
+    <Dialog v-model:visible="showDeleteModal" header="Delete Execution" :modal="true" :style="{ width: '450px' }">
+      <div class="modal-content">
+        <p>Are you sure?</p>
+      </div>
+      <template #footer>
+        <Button
+          label="No"
+          severity="secondary"
+          @click="showDeleteModal = false"
+        />
+        <Button
+          label="Yes"
+          severity="danger"
+          @click="handleDelete"
+        />
+      </template>
+    </Dialog>
   </div>
 </template>
 
@@ -196,6 +240,12 @@ const truncatedAnswer = computed(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 0.25rem;
+}
+
+.status-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
 }
 
 .card-title {

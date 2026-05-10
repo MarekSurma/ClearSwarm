@@ -28,6 +28,7 @@ export function useVisualGraph() {
   let network: Network | null = null
   let nodes: DataSet<VisNode> | null = null
   let edges: DataSet<VisEdge> | null = null
+  let isDestroyed = false
 
   const isLoading = ref(false)
 
@@ -93,6 +94,7 @@ export function useVisualGraph() {
   }
 
   async function initialize(container: HTMLElement, onNodeClick?: (nodeId: string) => void, onBackgroundClick?: () => void, onNodeHover?: (nodeId: string) => void, onNodeBlur?: () => void, onViewChange?: () => void) {
+    isDestroyed = false
     nodes = new DataSet([])
     edges = new DataSet([])
     container.innerHTML = ''
@@ -339,8 +341,14 @@ export function useVisualGraph() {
   }
 
   function cleanup() {
+    isDestroyed = true
     if (network) {
-      network.destroy()
+      try {
+        network.off()
+        network.destroy()
+      } catch {
+        // ignore errors during destruction
+      }
       network = null
     }
     nodes = null
@@ -356,11 +364,12 @@ export function useVisualGraph() {
   }
 
   function fitView() {
-    if (network) {
-      setTimeout(() => {
+    if (isDestroyed || !network) return
+    setTimeout(() => {
+      if (!isDestroyed) {
         network?.fit({ animation: { duration: 800, easingFunction: 'easeInOutQuad' } })
-      }, 100)
-    }
+      }
+    }, 100)
   }
 
   function addToolNode(parentAgentName: string, toolName: string) {

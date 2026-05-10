@@ -254,6 +254,36 @@ def get_execution_log(agent_id: str):
         )
 
 
+@router.delete("/executions/{agent_id}")
+def delete_execution(agent_id: str):
+    """Delete a single agent execution, all descendants, their tool executions, and log files."""
+    db = get_database()
+    execution = db.get_agent_execution(agent_id)
+    if not execution:
+        raise HTTPException(status_code=404, detail=f"Execution '{agent_id}' not found")
+
+    # Don't allow deleting running executions
+    if execution['completed_at'] is None:
+        raise HTTPException(status_code=400, detail="Cannot delete a running execution")
+
+    # Delete from DB — returns log file paths of all deleted executions
+    log_files = db.delete_execution(agent_id)
+
+    # Also include the root execution's own log file
+    root_log = execution.get('log_file')
+    if root_log:
+        log_files.append(root_log)
+
+    # Remove log files from disk
+    for log_file in log_files:
+        try:
+            Path(log_file).unlink(missing_ok=True)
+        except OSError:
+            pass  # non-critical — DB entry is already gone
+
+    return {"message": f"Execution '{agent_id}' deleted"}
+
+
 @router.get("/executions/{agent_id}/tools", response_model=List[ToolExecution])
 def get_execution_tools(agent_id: str):
     """Get all tool executions for an agent."""

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
+import { ref, watch, nextTick, onUnmounted } from 'vue'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
 import ProgressSpinner from 'primevue/progressspinner'
@@ -73,6 +73,11 @@ async function stopExecutionTree() {
 function close() {
   emit('update:visible', false)
 }
+
+onUnmounted(() => {
+  graph.cleanup()
+  nodeDetails.clearSelection()
+})
 </script>
 
 <template>

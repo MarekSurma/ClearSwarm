@@ -370,6 +370,51 @@ class AgentDatabase:
                 for row in rows
             ]
 
+    def delete_execution(self, agent_id: str) -> List[str]:
+        """
+        Delete a single agent execution, all its descendants, and their tool executions.
+
+        Args:
+            agent_id: ID of the agent execution to delete
+
+        Returns:
+            List of log file paths that were associated with deleted executions.
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+
+            # BFS: collect all descendant IDs and their log files
+            log_files: List[str] = []
+            to_delete = [agent_id]
+            queue = [agent_id]
+            while queue:
+                cursor.execute(
+                    "SELECT agent_id, log_file FROM agent_executions WHERE parent_agent_id = ?",
+                    (queue.pop(0),),
+                )
+                for child_id, log_file in cursor.fetchall():
+                    to_delete.append(child_id)
+                    queue.append(child_id)
+                    if log_file:
+                        log_files.append(log_file)
+
+            placeholders = ",".join("?" for _ in to_delete)
+
+            # Delete tool executions for all affected agents
+            cursor.execute(
+                f"DELETE FROM tool_executions WHERE agent_id IN ({placeholders})",
+                to_delete,
+            )
+
+            # Delete all agent executions in the tree
+            cursor.execute(
+                f"DELETE FROM agent_executions WHERE agent_id IN ({placeholders})",
+                to_delete,
+            )
+            conn.commit()
+
+        return log_files
+
     def update_agent_state(self, agent_id: str, state: str):
         """
         Update agent's current state.

@@ -17,6 +17,7 @@ export function useGraph() {
   let animationHandle: number | null = null
   let fetchInterval: ReturnType<typeof setInterval> | null = null
   let animationPhase = 0
+  let isDestroyed = false
   const runningNodeIds = new Set<string>()
   const graphNodeData = new Map<string, GraphNode>()
 
@@ -176,6 +177,7 @@ export function useGraph() {
   }
 
   async function initializeGraph(agentId: string, container: HTMLElement, onNodeClick?: (nodeId: string) => void) {
+    isDestroyed = false
     loading.value = true
     currentAgentId.value = agentId
     nodes = new DataSet([])
@@ -207,6 +209,9 @@ export function useGraph() {
 
       // Use setTimeout to yield the main thread and allow the UI to show the loading state
       await new Promise(resolve => setTimeout(resolve, 50))
+
+      // Check if component was destroyed while waiting for the main thread
+      if (isDestroyed) return
 
       createNetwork(container, graphOptions, onNodeClick)
 
@@ -561,9 +566,15 @@ export function useGraph() {
   }
 
   function cleanup() {
+    isDestroyed = true
     stopAutoRefresh()
     if (network) {
-      network.destroy()
+      try {
+        network.off()
+        network.destroy()
+      } catch {
+        // ignore errors during destruction
+      }
       network = null
     }
     nodes = null
@@ -576,33 +587,37 @@ export function useGraph() {
   }
 
   function fitView() {
+    if (isDestroyed) return
     network?.fit({ animation: { duration: 1000, easingFunction: 'easeInOutQuad' } })
   }
 
   function resetPhysics() {
+    if (isDestroyed) return
     network?.stabilize()
   }
 
   function togglePhysics() {
-    if (!network) return
+    if (isDestroyed || !network) return
     physicsEnabled.value = !physicsEnabled.value
     network.setOptions({ physics: { enabled: physicsEnabled.value } })
   }
 
   function toggleLayout() {
-    if (!network) return
+    if (isDestroyed || !network) return
     const newLayout = layoutType.value === LAYOUT_PHYSICS ? LAYOUT_HIERARCHICAL : LAYOUT_PHYSICS
     layoutType.value = newLayout
     localStorage.setItem(LAYOUT_STORAGE_KEY, newLayout)
     network.setOptions(getGraphOptions(newLayout))
     setTimeout(() => {
-      network?.stabilize()
-      network?.fit()
+      if (!isDestroyed) {
+        network?.stabilize()
+        network?.fit()
+      }
     }, 100)
   }
 
   function exportImage() {
-    if (!network) return
+    if (isDestroyed || !network) return
     const canvas = (network as any).canvas.frame.canvas as HTMLCanvasElement
     const dataURL = canvas.toDataURL('image/png')
     const link = document.createElement('a')
@@ -612,13 +627,13 @@ export function useGraph() {
   }
 
   function getNodeGroup(nodeId: string): string | null {
-    if (!nodes) return null
+    if (isDestroyed || !nodes) return null
     const node = nodes.get(nodeId)
     return node?.group || null
   }
 
   function getParentAgentId(toolNodeId: string): string | null {
-    if (!edges) return null
+    if (isDestroyed || !edges) return null
     const edgeIds = edges.getIds() as string[]
     for (const edgeId of edgeIds) {
       const edge = edges.get(edgeId)

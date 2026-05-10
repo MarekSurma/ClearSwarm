@@ -22,6 +22,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   viewGraph: [agentId: string]
   stopped: []
+  deleted: [agentId: string]
 }>()
 
 const toast = useToast()
@@ -93,6 +94,7 @@ async function stopAll() {
                 :key="'root-' + exec.agent_id"
                 :execution="exec"
                 @view-graph="emit('viewGraph', $event)"
+                @deleted="emit('deleted', $event)"
               />
               <Message v-if="hiddenRootCount > 0" severity="secondary" :closable="false">
                 + {{ hiddenRootCount }} more ({{ rootExecutions.length }} total)
@@ -111,6 +113,7 @@ async function stopAll() {
                 :key="'running-' + exec.agent_id"
                 :execution="exec"
                 @view-graph="emit('viewGraph', $event)"
+                @deleted="emit('deleted', $event)"
               />
               <Message v-if="hiddenRunningCount > 0" severity="secondary" :closable="false">
                 + {{ hiddenRunningCount }} more ({{ runningExecutions.length }} total)

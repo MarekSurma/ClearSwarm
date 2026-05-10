@@ -82,6 +82,7 @@ export function useApi() {
   const getExecutionTree = (id: string) => request<ExecutionTree>(`/api/executions/${id}/tree`)
   const getExecutionLog = (id: string) => request<ExecutionLog>(`/api/executions/${id}/log`)
   const getExecutionTools = (id: string) => request<ToolExecution[]>(`/api/executions/${id}/tools`)
+  const deleteExecution = (id: string) => request<{ message: string }>(`/api/executions/${id}`, { method: 'DELETE' })
   // ETag-aware graph fetching (legacy, kept for backward compatibility)
   let _graphEtag: string | null = null
 
@@ -177,6 +178,7 @@ export function useApi() {
     getExecutionTree,
     getExecutionLog,
     getExecutionTools,
+    deleteExecution,
     getExecutionGraph,
     resetGraphEtag,
     getGraphDelta,
