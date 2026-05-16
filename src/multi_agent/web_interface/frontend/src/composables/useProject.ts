@@ -4,10 +4,35 @@
 import { ref, computed, type Ref } from 'vue'
 import type { ProjectInfo, CreateProjectRequest, CloneProjectRequest } from '../types/project'
 
+const PROJECT_STORAGE_KEY = 'clearswarm_last_project'
+
+/**
+ * Load the last selected project from localStorage (if any)
+ */
+function loadStoredProject(): string | null {
+  try {
+    return localStorage.getItem(PROJECT_STORAGE_KEY)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Persist the selected project to localStorage
+ */
+function storeProject(projectDir: string): void {
+  try {
+    localStorage.setItem(PROJECT_STORAGE_KEY, projectDir)
+  } catch {
+    // ignore storage errors
+  }
+}
+
 // Module-level refs (shared singleton state)
+const storedDir = loadStoredProject()
 const currentProject: Ref<ProjectInfo> = ref({
-  project_name: 'default',
-  project_dir: 'default',
+  project_name: storedDir || 'default',
+  project_dir: storedDir || 'default',
   created_at: new Date().toISOString()
 })
 
@@ -33,9 +58,18 @@ export function useProject() {
       const data = await response.json()
       projects.value = data
 
-      // Set current project to default if not already set
+      // Restore last selected project, or fall back to default
+      const storedDir = loadStoredProject()
+      if (storedDir) {
+        const storedProject = data.find((p: ProjectInfo) => p.project_dir === storedDir)
+        if (storedProject) {
+          currentProject.value = storedProject
+          return
+        }
+      }
+      // No stored project or stored project no longer exists — use default
       const defaultProject = data.find((p: ProjectInfo) => p.project_dir === 'default')
-      if (defaultProject && currentProject.value.project_dir === 'default') {
+      if (defaultProject) {
         currentProject.value = defaultProject
       }
     } catch (error) {
@@ -60,6 +94,9 @@ export function useProject() {
 
     currentProject.value = targetProject
     pendingProject.value = null
+
+    // Persist selection to localStorage
+    storeProject(targetProject.project_dir)
 
     // Trigger reload event (components can listen to this)
     window.dispatchEvent(new CustomEvent('project-switched', { detail: targetProject }))
