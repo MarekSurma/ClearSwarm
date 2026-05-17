@@ -3,6 +3,7 @@ import { Network, DataSet } from 'vis-network/standalone'
 import type { GraphData, GraphNode, GraphEdge, GraphChange, GraphStats } from '@/types/graph'
 import { useApi } from './useApi'
 import { GRAPH_COLORS } from '@/config/graphColors'
+import { AGENT_ICON_PERSON, TOOL_ICON_FALLBACK } from '@/config/agentIcons'
 
 const LAYOUT_STORAGE_KEY = 'agentGraphLayoutType'
 const LAYOUT_PHYSICS = 'physics'
@@ -302,6 +303,22 @@ export function useGraph() {
       enhancedLabel = `⚠️ ${node.error_count}\n${enhancedLabel}`
     }
 
+    const isAgentNode = node.group === 'root' || node.group === 'agent'
+    const isToolNode = node.group === 'tool'
+    const shape = isAgentNode || isToolNode ? 'circularImage' : node.shape
+
+    let image: string | undefined
+    let brokenImage: string | undefined
+    if (isAgentNode) {
+      image = AGENT_ICON_PERSON
+      brokenImage = AGENT_ICON_PERSON
+    } else if (isToolNode) {
+      // Backend builds tool label via tool_name.replace('_', ' '); reverse for icon URL.
+      const toolName = node.label.replace(/ /g, '_')
+      image = api.getToolIconUrl(toolName)
+      brokenImage = TOOL_ICON_FALLBACK
+    }
+
     return {
       id: node.id,
       label: enhancedLabel,
@@ -315,7 +332,8 @@ export function useGraph() {
       },
       borderWidth,
       shadow: shadowConfig,
-      shape: node.shape,
+      shape,
+      ...(image ? { image, brokenImage } : {}),
       size: node.size,
       title: node.error_count > 0
         ? `${node.label}\n⚠️ ${node.error_count} error${node.error_count > 1 ? 's' : ''}`

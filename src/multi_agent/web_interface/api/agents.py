@@ -6,6 +6,7 @@ import shutil
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from ...core.agent import AgentLoader, cancel_agent
@@ -381,6 +382,16 @@ async def list_tools(project: str = Query("default")):
         })
 
     return tools
+
+
+@router.get("/tools/{tool_name}/icon")
+async def get_tool_icon(tool_name: str, project: str = Query("default")):
+    """Return the SVG icon colocated with the tool's source file."""
+    tool_loader, _, _ = get_loaders(project)
+    icon_path = tool_loader.get_tool_icon_path(tool_name)
+    if icon_path is None:
+        raise HTTPException(status_code=404, detail=f"No icon for tool '{tool_name}'")
+    return FileResponse(icon_path, media_type="image/svg+xml")
 
 
 @router.get("/agents/{agent_name}/detail", response_model=AgentDetail)

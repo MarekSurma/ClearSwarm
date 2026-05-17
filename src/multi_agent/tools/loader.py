@@ -5,7 +5,7 @@ Dynamically loads tools from the user/tools directory.
 import importlib.util
 import inspect
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from .base import BaseTool
 
@@ -83,6 +83,14 @@ class ToolLoader:
     def get_tool_source(self, name: str) -> str:
         """Get the source filename (without .py) for a tool."""
         return self._tool_sources.get(name, "")
+
+    def get_tool_icon_path(self, name: str) -> Optional[Path]:
+        """Return path to the tool's icon SVG (colocated with its .py source), or None if missing."""
+        source = self._tool_sources.get(name)
+        if not source:
+            return None
+        icon_path = self.tools_dir / f"{source}.svg"
+        return icon_path if icon_path.is_file() else None
 
     def get_tool_definitions(self, tool_names: List[str] = None) -> List[dict]:
         """

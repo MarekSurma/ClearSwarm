@@ -3,6 +3,7 @@ import { Network, DataSet } from 'vis-network/standalone'
 import { useApi } from './useApi'
 import type { AgentDetail, ToolInfo } from '@/types/agent'
 import { GRAPH_COLORS } from '@/config/graphColors'
+import { AGENT_ICON_PERSON, TOOL_ICON_FALLBACK } from '@/config/agentIcons'
 import { toDisplayName } from '@/utils/nameFormatting'
 
 interface VisNode {
@@ -237,7 +238,9 @@ export function useVisualGraph() {
           nodes.add({
             id: agentNodeId,
             label: toDisplayName(agentName),
-            shape: 'box',
+            shape: 'circularImage',
+            image: AGENT_ICON_PERSON,
+            brokenImage: AGENT_ICON_PERSON,
             color: {
               background: GRAPH_COLORS.agent.background,
               border: GRAPH_COLORS.agent.border,
@@ -294,7 +297,9 @@ export function useVisualGraph() {
               nodes.add({
                 id: toolNodeId,
                 label: toDisplayName(toolOrAgent),
-                shape: 'box',
+                shape: 'circularImage',
+                image: api.getToolIconUrl(toolOrAgent),
+                brokenImage: TOOL_ICON_FALLBACK,
                 color: {
                   background: GRAPH_COLORS.tool.background,
                   border: GRAPH_COLORS.tool.border,
@@ -382,7 +387,9 @@ export function useVisualGraph() {
       nodes.add({
         id: toolNodeId,
         label: toDisplayName(toolName),
-        shape: 'box',
+        shape: 'circularImage',
+        image: api.getToolIconUrl(toolName),
+        brokenImage: TOOL_ICON_FALLBACK,
         color: {
           background: GRAPH_COLORS.tool.background,
           border: GRAPH_COLORS.tool.border,
@@ -457,7 +464,9 @@ export function useVisualGraph() {
         nodes.add({
           id: agentNodeId,
           label: toDisplayName(agentName),
-          shape: 'box',
+          shape: 'circularImage',
+          image: AGENT_ICON_PERSON,
+          brokenImage: AGENT_ICON_PERSON,
           color: {
             background: GRAPH_COLORS.agent.background,
             border: GRAPH_COLORS.agent.border,

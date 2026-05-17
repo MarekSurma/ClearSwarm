@@ -30,6 +30,10 @@ export function useApi() {
   const getAgent = (name: string) => request<AgentInfo>(withProject(`/api/agents/${name}`))
   const getAgentDetail = (name: string) => request<AgentDetail>(withProject(`/api/agents/${name}/detail`))
 
+  // Returns a URL (not a JSON request) — used directly as <img src> / vis-network image.
+  const getToolIconUrl = (toolName: string) =>
+    withProject(`/api/tools/${encodeURIComponent(toolName)}/icon`)
+
   const createAgent = (data: CreateAgentRequest) =>
     request<AgentDetail>(withProject('/api/agents'), {
       method: 'POST',
@@ -173,6 +177,7 @@ export function useApi() {
     stopAllAgents,
     stopAgentTree,
     getTools,
+    getToolIconUrl,
     getExecutions,
     getExecution,
     getExecutionTree,
