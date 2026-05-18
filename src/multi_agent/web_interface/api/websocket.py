@@ -82,10 +82,13 @@ async def websocket_updates(websocket: WebSocket, project: str = "default"):
                     "agent_id": exec['agent_id'],
                     "agent_name": exec['agent_name'],
                     "parent_agent_id": exec['parent_agent_id'],
+                    "parent_agent_name": exec.get('parent_agent_name', 'root'),
                     "started_at": exec['started_at'],
                     "completed_at": exec['completed_at'],
                     "current_state": exec.get('current_state', 'generating'),
-                    "is_running": exec['completed_at'] is None
+                    "is_running": exec['completed_at'] is None,
+                    "question": exec.get('question'),
+                    "final_response": exec.get('final_response')
                 }
                 for exec in executions
             ]
@@ -93,7 +96,7 @@ async def websocket_updates(websocket: WebSocket, project: str = "default"):
 
         # Keep connection alive and send updates periodically
         last_execution_snapshot = {
-            e['agent_id']: (e['completed_at'], e.get('current_state', 'generating'))
+            e['agent_id']: (e['completed_at'], e.get('current_state', 'generating'), e.get('final_response'))
             for e in executions
         }
 
@@ -110,7 +113,7 @@ async def websocket_updates(websocket: WebSocket, project: str = "default"):
 
             # Build current snapshot for comparison
             current_snapshot = {
-                e['agent_id']: (e['completed_at'], e.get('current_state', 'generating'))
+                e['agent_id']: (e['completed_at'], e.get('current_state', 'generating'), e.get('final_response'))
                 for e in current_executions
             }
 
@@ -135,10 +138,13 @@ async def websocket_updates(websocket: WebSocket, project: str = "default"):
                             "agent_id": exec['agent_id'],
                             "agent_name": exec['agent_name'],
                             "parent_agent_id": exec['parent_agent_id'],
+                            "parent_agent_name": exec.get('parent_agent_name', 'root'),
                             "started_at": exec['started_at'],
                             "completed_at": exec['completed_at'],
                             "current_state": exec.get('current_state', 'generating'),
-                            "is_running": exec['completed_at'] is None
+                            "is_running": exec['completed_at'] is None,
+                            "question": exec.get('question'),
+                            "final_response": exec.get('final_response')
                         }
                         for exec in limited_executions
                     ]

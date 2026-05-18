@@ -10,6 +10,7 @@ const emit = defineEmits<{
   'toggle-layout': []
   fit: []
   reset: []
+  'reset-saved-layout': []
   'toggle-physics': []
   export: []
   stop: []
@@ -40,6 +41,7 @@ const emit = defineEmits<{
     <div class="control-group">
       <Button v-tooltip.bottom="'Fit View to All Nodes'" icon="pi pi-arrows-alt" size="small" outlined severity="secondary" @click="emit('fit')" />
       <Button v-tooltip.bottom="'Reset Physics & Position'" icon="pi pi-refresh" size="small" outlined severity="secondary" @click="emit('reset')" />
+      <Button v-tooltip.bottom="'Clear Saved Layout (recompute from scratch)'" icon="pi pi-eraser" size="small" outlined severity="secondary" @click="emit('reset-saved-layout')" />
     </div>
 
     <div class="control-group">

@@ -125,6 +125,44 @@ export function useApi() {
     return data
   }
 
+  // Graph layout persistence
+  type GraphLayoutPositions = Record<string, { x: number; y: number }>
+
+  const getGraphLayout = async (agentId: string, layout: string): Promise<GraphLayoutPositions> => {
+    const url = withProject(`/api/executions/${agentId}/graph/layout`) + `&layout=${encodeURIComponent(layout)}`
+    try {
+      const response = await fetch(`${API_BASE}${url}`)
+      if (!response.ok) return {}
+      const data = await response.json().catch(() => null) as { positions?: GraphLayoutPositions } | null
+      return data?.positions ?? {}
+    } catch {
+      return {}
+    }
+  }
+
+  const putGraphLayout = async (agentId: string, layout: string, positions: GraphLayoutPositions): Promise<void> => {
+    const url = withProject(`/api/executions/${agentId}/graph/layout`) + `&layout=${encodeURIComponent(layout)}`
+    try {
+      await fetch(`${API_BASE}${url}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ positions }),
+      })
+    } catch {
+      // best-effort persistence; ignore network errors
+    }
+  }
+
+  const deleteGraphLayout = async (agentId: string, layout?: string): Promise<void> => {
+    let url = withProject(`/api/executions/${agentId}/graph/layout`)
+    if (layout) url += `&layout=${encodeURIComponent(layout)}`
+    try {
+      await fetch(`${API_BASE}${url}`, { method: 'DELETE' })
+    } catch {
+      // ignore
+    }
+  }
+
   // Projects
   const getProjects = () => request<ProjectInfo[]>('/api/projects')
   const createProject = (data: CreateProjectRequest) =>
@@ -188,6 +226,9 @@ export function useApi() {
     resetGraphEtag,
     getGraphDelta,
     resetGraphSequence,
+    getGraphLayout,
+    putGraphLayout,
+    deleteGraphLayout,
     getProjects,
     createProject,
     cloneProject,

@@ -117,6 +117,7 @@ onUnmounted(() => {
         @toggle-layout="graph.toggleLayout()"
         @fit="graph.fitView()"
         @reset="graph.resetPhysics()"
+        @reset-saved-layout="graph.resetSavedLayout()"
         @toggle-physics="graph.togglePhysics()"
         @export="graph.exportImage()"
         @stop="stopExecutionTree()"

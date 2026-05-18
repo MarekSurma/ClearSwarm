@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 
 from starlette.middleware.gzip import GZipMiddleware
 
-from .api import agents, executions, websocket, projects, schedules
+from .api import agents, executions, websocket, projects, schedules, graph_layouts
 from ..core.llm_client import request_shutdown, reset_shutdown
 from ..core.database import get_database
 from ..core.project import ProjectManager
@@ -95,6 +95,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 # Include API routers
 app.include_router(agents.router, prefix="/api", tags=["agents"])
 app.include_router(executions.router, prefix="/api", tags=["executions"])
+app.include_router(graph_layouts.router, prefix="/api", tags=["graph-layouts"])
 app.include_router(projects.router, prefix="/api", tags=["projects"])
 app.include_router(schedules.router, prefix="/api", tags=["schedules"])
 app.include_router(websocket.router, prefix="/ws", tags=["websocket"])

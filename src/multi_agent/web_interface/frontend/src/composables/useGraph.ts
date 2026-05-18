@@ -25,6 +25,11 @@ export function useGraph() {
   const POLL_ACTIVE_MS = 2000   // 2s when agents are running
   const POLL_IDLE_MS = 10000    // 10s when everything completed
   const LARGE_GRAPH_THRESHOLD = 300  // disable physics above this
+  const LAYOUT_SAVE_DEBOUNCE_MS = 750
+
+  type SavedPositions = Record<string, { x: number; y: number }>
+  let savedPositions: SavedPositions = {}
+  let saveTimer: ReturnType<typeof setTimeout> | null = null
 
   const currentAgentId = ref<string | null>(null)
   const stats = ref<GraphStats>({
@@ -175,6 +180,44 @@ export function useGraph() {
     network.on('blurNode', () => {
       container.style.cursor = 'default'
     })
+
+    network.on('stabilizationIterationsDone', () => {
+      schedulePositionsSave()
+    })
+
+    network.on('dragEnd', () => {
+      schedulePositionsSave()
+    })
+  }
+
+  function applySavedPosition(visNode: any): any {
+    const pos = savedPositions[visNode.id]
+    if (pos) {
+      visNode.x = pos.x
+      visNode.y = pos.y
+      visNode.physics = false
+    } else {
+      visNode.physics = true
+    }
+    return visNode
+  }
+
+  function schedulePositionsSave() {
+    if (isDestroyed || !network || !currentAgentId.value) return
+    if (saveTimer) clearTimeout(saveTimer)
+    saveTimer = setTimeout(() => {
+      saveTimer = null
+      if (isDestroyed || !network || !currentAgentId.value) return
+      const positions = network.getPositions() as Record<string, { x: number; y: number }>
+      const flat: SavedPositions = {}
+      for (const [id, p] of Object.entries(positions)) {
+        if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) {
+          flat[id] = { x: p.x, y: p.y }
+        }
+      }
+      savedPositions = flat
+      api.putGraphLayout(currentAgentId.value, layoutType.value, flat)
+    }, LAYOUT_SAVE_DEBOUNCE_MS)
   }
 
   async function initializeGraph(agentId: string, container: HTMLElement, onNodeClick?: (nodeId: string) => void) {
@@ -184,15 +227,21 @@ export function useGraph() {
     nodes = new DataSet([])
     edges = new DataSet([])
     graphNodeData.clear()
+    savedPositions = {}
+    if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
     container.innerHTML = ''
 
     api.resetGraphSequence()
 
     try {
-      // Pre-fetch graph data to determine size before creating the network
+      // Pre-fetch graph data + saved layout in parallel
       let graphData: GraphData | null = null
       try {
-        const response = await api.getGraphDelta(agentId)
+        const [response, positions] = await Promise.all([
+          api.getGraphDelta(agentId),
+          api.getGraphLayout(agentId, layoutType.value).catch(() => ({})),
+        ])
+        savedPositions = positions as SavedPositions
         if (response && response.type === 'snapshot') {
           graphData = { nodes: response.nodes, edges: response.edges }
         }
@@ -378,7 +427,7 @@ export function useGraph() {
       if (nodes!.get(node.id)) {
         nodesToUpdate.push(visNode)
       } else {
-        nodesToAdd.push(visNode)
+        nodesToAdd.push(applySavedPosition(visNode))
       }
     })
 
@@ -427,7 +476,10 @@ export function useGraph() {
           graphNodeData.set(nodeData.id, nodeData)
           if (nodeData.is_running) runningNodeIds.add(nodeData.id)
           else runningNodeIds.delete(nodeData.id)
-          nodesToUpdate.push(buildVisNode(nodeData, isLarge))
+          const visNode = buildVisNode(nodeData, isLarge)
+          const isNew = !nodes!.get(nodeData.id)
+          if (isNew) applySavedPosition(visNode)
+          nodesToUpdate.push(visNode)
           break
         }
         case 'node_remove':
@@ -586,6 +638,8 @@ export function useGraph() {
   function cleanup() {
     isDestroyed = true
     stopAutoRefresh()
+    if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
+    savedPositions = {}
     if (network) {
       try {
         network.off()
@@ -620,18 +674,58 @@ export function useGraph() {
     network.setOptions({ physics: { enabled: physicsEnabled.value } })
   }
 
-  function toggleLayout() {
+  async function toggleLayout() {
     if (isDestroyed || !network) return
     const newLayout = layoutType.value === LAYOUT_PHYSICS ? LAYOUT_HIERARCHICAL : LAYOUT_PHYSICS
     layoutType.value = newLayout
     localStorage.setItem(LAYOUT_STORAGE_KEY, newLayout)
     network.setOptions(getGraphOptions(newLayout))
+
+    if (currentAgentId.value) {
+      savedPositions = await api.getGraphLayout(currentAgentId.value, newLayout).catch(() => ({}))
+      if (nodes) {
+        const isLarge = (stats.value.totalNodes || 0) > LARGE_GRAPH_THRESHOLD
+        const updates: any[] = []
+        nodes.forEach((_n: any, id: any) => {
+          const nodeData = graphNodeData.get(id as string)
+          if (!nodeData) return
+          const visNode = buildVisNode(nodeData, isLarge)
+          applySavedPosition(visNode)
+          updates.push(visNode)
+        })
+        if (updates.length > 0) nodes.update(updates)
+      }
+    }
+
     setTimeout(() => {
       if (!isDestroyed) {
         network?.stabilize()
         network?.fit()
       }
     }, 100)
+  }
+
+  async function resetSavedLayout() {
+    if (isDestroyed || !network) return
+    savedPositions = {}
+    if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
+    if (currentAgentId.value) {
+      await api.deleteGraphLayout(currentAgentId.value, layoutType.value)
+    }
+    if (nodes) {
+      const isLarge = (stats.value.totalNodes || 0) > LARGE_GRAPH_THRESHOLD
+      const updates: any[] = []
+      nodes.forEach((_n: any, id: any) => {
+        const nodeData = graphNodeData.get(id as string)
+        if (!nodeData) return
+        const visNode = buildVisNode(nodeData, isLarge)
+        visNode.physics = true
+        updates.push(visNode)
+      })
+      if (updates.length > 0) nodes.update(updates)
+    }
+    network.stabilize()
+    setTimeout(() => network?.fit(), 200)
   }
 
   function exportImage() {
@@ -673,6 +767,7 @@ export function useGraph() {
     resetPhysics,
     togglePhysics,
     toggleLayout,
+    resetSavedLayout,
     exportImage,
     getNodeGroup,
     getParentAgentId,
