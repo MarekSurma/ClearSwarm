@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import Select from 'primevue/select'
-import Textarea from 'primevue/textarea'
+import MentionEditor from '@/components/common/MentionEditor.vue'
 import Button from 'primevue/button'
 import Fluid from 'primevue/fluid'
 import FloatLabel from 'primevue/floatlabel'
 import { useToast } from 'primevue/usetoast'
 import type { AgentInfo } from '@/types/agent'
 import { useApi } from '@/composables/useApi'
+import { useProject } from '@/composables/useProject'
 import { toDisplayName } from '@/utils/nameFormatting'
 
 const props = defineProps<{
@@ -20,6 +21,7 @@ const emit = defineEmits<{
 
 const toast = useToast()
 const api = useApi()
+const { projects } = useProject()
 
 const selectedAgent = ref<string | null>(null)
 const message = ref('')
@@ -28,6 +30,9 @@ const launching = ref(false)
 const agentOptions = computed(() =>
   props.agents.map((a) => ({ label: toDisplayName(a.name), value: a.name }))
 )
+
+const agentNames = computed(() => props.agents.map(a => a.name))
+const projectNames = computed(() => projects.value.map(p => p.project_name))
 
 const selectedAgentDescription = computed(() => {
   if (!selectedAgent.value) return ''
@@ -81,10 +86,12 @@ async function launchAgent() {
       </small>
 
       <FloatLabel variant="on">
-        <Textarea
+        <MentionEditor
           id="message-input"
           v-model="message"
           :rows="4"
+          :agents="agentNames"
+          :projects="projectNames"
           @keydown.ctrl.enter="launchAgent"
         />
         <label for="message-input">Message</label>

@@ -1,17 +1,20 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
+import MentionEditor from '@/components/common/MentionEditor.vue'
 import Button from 'primevue/button'
 import { useApi } from '@/composables/useApi'
+import { useProject } from '@/composables/useProject'
 import { useToast } from 'primevue/usetoast'
-import type { AgentDetail } from '@/types/agent'
+import type { AgentDetail, AgentInfo } from '@/types/agent'
 import { toDisplayName } from '@/utils/nameFormatting'
 
 const props = defineProps<{
   visible: boolean
   agentDetail: AgentDetail | null
+  agents?: AgentInfo[]
 }>()
 
 const emit = defineEmits<{
@@ -21,10 +24,14 @@ const emit = defineEmits<{
 
 const api = useApi()
 const toast = useToast()
+const { projects } = useProject()
 
 const description = ref('')
 const systemPrompt = ref('')
 const isSaving = ref(false)
+
+const agentNames = computed(() => (props.agents || []).map(a => a.name))
+const projectNames = computed(() => projects.value.map(p => p.project_name))
 
 watch(
   () => props.visible,
@@ -101,11 +108,12 @@ function cancel() {
 
       <div class="field">
         <label for="agent-system-prompt">System Prompt</label>
-        <Textarea
+        <MentionEditor
           id="agent-system-prompt"
           v-model="systemPrompt"
-          rows="10"
-          class="w-full"
+          :rows="10"
+          :agents="agentNames"
+          :projects="projectNames"
           placeholder="System prompt"
         />
       </div>

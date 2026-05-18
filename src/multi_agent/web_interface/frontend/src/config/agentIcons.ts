@@ -47,5 +47,20 @@ const gearSvg = `
 </svg>
 `
 
+const PROJECT_BG = '#fff4d6'
+const PROJECT_GLYPH = '#8a5a00'
+const PROJECT_STROKE = '#4a3000'
+
+const folderSvg = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <rect width="100" height="100" fill="${PROJECT_BG}"/>
+  <g transform="translate(7.5 7.5) scale(0.85)">
+    <path d="M 8 28 L 8 82 Q 8 88 14 88 L 86 88 Q 92 88 92 82 L 92 38 Q 92 32 86 32 L 48 32 L 40 22 L 14 22 Q 8 22 8 28 Z"
+          fill="${PROJECT_GLYPH}" stroke="${PROJECT_STROKE}" stroke-width="3" stroke-linejoin="round"/>
+  </g>
+</svg>
+`
+
 export const AGENT_ICON_PERSON = svgDataUri(personBustSvg)
 export const TOOL_ICON_FALLBACK = svgDataUri(gearSvg)
+export const PROJECT_ICON_FOLDER = svgDataUri(folderSvg)

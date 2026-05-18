@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
+import MentionEditor from '@/components/common/MentionEditor.vue'
 import Button from 'primevue/button'
 import { useApi } from '@/composables/useApi'
+import { useProject } from '@/composables/useProject'
 import { useToast } from 'primevue/usetoast'
 import { toDiskName } from '@/utils/nameFormatting'
+import type { AgentInfo } from '@/types/agent'
 
 const props = defineProps<{
   visible: boolean
+  agents?: AgentInfo[]
 }>()
 
 const emit = defineEmits<{
@@ -19,11 +23,15 @@ const emit = defineEmits<{
 
 const api = useApi()
 const toast = useToast()
+const { projects } = useProject()
 
 const name = ref('')
 const description = ref('')
 const systemPrompt = ref('')
 const isSaving = ref(false)
+
+const agentNames = computed(() => (props.agents || []).map(a => a.name))
+const projectNames = computed(() => projects.value.map(p => p.project_name))
 
 watch(
   () => props.visible,
@@ -131,11 +139,13 @@ function cancel() {
 
       <div class="field">
         <label for="new-agent-system-prompt">System Prompt</label>
-        <Textarea
+        <MentionEditor
           id="new-agent-system-prompt"
           v-model="systemPrompt"
-          rows="12"
-          class="w-full mono-textarea"
+          :rows="12"
+          :agents="agentNames"
+          :projects="projectNames"
+          class="mono-editor"
           placeholder="Enter the system prompt that defines the agent's behavior..."
         />
       </div>
@@ -174,7 +184,8 @@ function cancel() {
   margin-top: -0.25rem;
 }
 
-.mono-textarea :deep(textarea) {
+.mono-editor :deep(.mention-editor-textarea),
+.mono-editor :deep(.mention-editor-backdrop) {
   font-family: 'Courier New', Courier, monospace;
   font-size: 0.85rem;
 }

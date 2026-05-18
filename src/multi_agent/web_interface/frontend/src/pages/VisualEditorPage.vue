@@ -355,14 +355,15 @@ async function handleDeleteAgent(agentName: string) {
 
     <!-- Agent Edit Modal -->
     <AgentEditModal
-      v-model:visible="showEditModal"
-      :agentDetail="selectedNodeAgentDetail"
-      @saved="handleModalSaved"
+     v-model:visible="showEditModal"
+     :agentDetail="selectedNodeAgentDetail"
+     :agents="agents"
+     @saved="handleModalSaved"
     />
-
     <!-- Agent Create Modal -->
     <AgentCreateModal
       v-model:visible="showCreateModal"
+      :agents="agents"
       @saved="handleAgentCreated"
     />
   </div>
