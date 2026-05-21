@@ -5,48 +5,64 @@ Dynamically loads tools from the user/tools directory.
 import importlib.util
 import inspect
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union, Sequence
 
 from .base import BaseTool
 
 
-class ToolLoader:
-    """Loads tools from the user/tools directory."""
+PathLike = Union[str, Path]
 
-    def __init__(self, tools_dir: str = "user/tools"):
+
+class ToolLoader:
+    """Loads tools from one or more tool directories."""
+
+    def __init__(self, tools_dir: Union[PathLike, Sequence[PathLike]] = "user/tools"):
         """
         Initialize tool loader.
 
         Args:
-            tools_dir: Directory containing tool modules (default: user/tools)
+            tools_dir: A single directory or an ordered list of directories
+                containing tool modules. When a list is given, later directories
+                override earlier ones for files with the same name (so the
+                typical usage is ``[default_tools, project_tools]``).
         """
-        self.tools_dir = Path(tools_dir)
+        if isinstance(tools_dir, (list, tuple)):
+            self.tools_dirs: List[Path] = [Path(d) for d in tools_dir]
+            self.tools_dir: Path = self.tools_dirs[-1] if self.tools_dirs else Path(".")
+        else:
+            self.tools_dir = Path(tools_dir)
+            self.tools_dirs = [self.tools_dir]
         self._tools: Dict[str, BaseTool] = {}
         self._tool_sources: Dict[str, str] = {}  # tool_name -> source filename (without .py)
+        self._tool_source_dirs: Dict[str, Path] = {}  # tool_name -> source directory
 
     def load_tools(self) -> Dict[str, BaseTool]:
         """
-        Load all tools from tools directory.
+        Load all tools from the configured directories.
+
+        When multiple directories are configured, a file in a later directory
+        with the same name as one in an earlier directory fully replaces the
+        earlier file (its tools are not loaded).
 
         Returns:
             Dictionary mapping tool names to tool instances
         """
-        if not self.tools_dir.exists():
-            return {}
-
-        for tool_file in self.tools_dir.glob("*.py"):
-            if tool_file.name.startswith("_"):
+        # Resolve which file wins for each stem (later dirs override earlier).
+        file_map: Dict[str, Path] = {}
+        for tdir in self.tools_dirs:
+            if not tdir.exists():
                 continue
+            for tool_file in tdir.glob("*.py"):
+                if tool_file.name.startswith("_"):
+                    continue
+                file_map[tool_file.stem] = tool_file
 
+        for stem, tool_file in file_map.items():
             try:
-                # Load module dynamically
-                spec = importlib.util.spec_from_file_location(
-                    tool_file.stem, tool_file
-                )
+                spec = importlib.util.spec_from_file_location(stem, tool_file)
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
 
-                # Find all BaseTool subclasses in the module
                 for item_name in dir(module):
                     item = getattr(module, item_name)
                     if (inspect.isclass(item) and
@@ -55,6 +71,7 @@ class ToolLoader:
                         tool_instance = item()
                         self._tools[tool_instance.name] = tool_instance
                         self._tool_sources[tool_instance.name] = tool_file.stem
+                        self._tool_source_dirs[tool_instance.name] = tool_file.parent
 
             except Exception as e:
                 print(f"Error loading tool from {tool_file}: {e}")
@@ -89,7 +106,8 @@ class ToolLoader:
         source = self._tool_sources.get(name)
         if not source:
             return None
-        icon_path = self.tools_dir / f"{source}.svg"
+        source_dir = self._tool_source_dirs.get(name, self.tools_dir)
+        icon_path = source_dir / f"{source}.svg"
         return icon_path if icon_path.is_file() else None
 
     def get_tool_definitions(self, tool_names: List[str] = None) -> List[dict]:

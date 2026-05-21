@@ -180,6 +180,56 @@ export function useApi() {
   const deleteProject = (projectName: string) =>
     request<{ message: string }>(`/api/projects/${encodeURIComponent(projectName)}`, { method: 'DELETE' })
 
+  // Project files
+  type FileEntry = { name: string; path: string; is_dir: boolean; size: number }
+  type ListResponse = { project_dir: string; path: string; entries: FileEntry[] }
+
+  const listProjectFiles = (path: string = '') => {
+    const projectDir = encodeURIComponent(currentProject.value.project_dir)
+    const q = path ? `?path=${encodeURIComponent(path)}` : ''
+    return request<ListResponse>(`/api/projects/${projectDir}/files${q}`)
+  }
+
+  const uploadProjectFile = async (file: File, path: string = '') => {
+    const projectDir = encodeURIComponent(currentProject.value.project_dir)
+    const form = new FormData()
+    form.append('file', file)
+    form.append('path', path)
+    const response = await fetch(`${API_BASE}/api/projects/${projectDir}/files/upload`, {
+      method: 'POST',
+      body: form,
+    })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }))
+      throw new Error(error.detail || `HTTP ${response.status}`)
+    }
+    return response.json() as Promise<{ path: string; size: number }>
+  }
+
+  const getProjectFileContent = (path: string) => {
+    const projectDir = encodeURIComponent(currentProject.value.project_dir)
+    return request<{ path: string; name: string; size: number; truncated: boolean; content: string }>(
+      `/api/projects/${projectDir}/files/content?path=${encodeURIComponent(path)}`
+    )
+  }
+
+  const downloadProjectFileUrl = (path: string): string => {
+    const projectDir = encodeURIComponent(currentProject.value.project_dir)
+    return `${API_BASE}/api/projects/${projectDir}/files/download?path=${encodeURIComponent(path)}`
+  }
+
+  const deleteProjectFiles = (paths: string[]) => {
+    const projectDir = encodeURIComponent(currentProject.value.project_dir)
+    return request<{ deleted: string[]; errors: { path: string; error: string }[] }>(
+      `/api/projects/${projectDir}/files/delete`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paths }),
+      }
+    )
+  }
+
   // Schedules
   const getSchedules = () => request<ScheduleInfo[]>(withProject('/api/schedules'))
   const getSchedule = (id: string) => request<ScheduleInfo>(`/api/schedules/${id}`)
@@ -239,5 +289,10 @@ export function useApi() {
     updateSchedule,
     deleteSchedule,
     toggleSchedule,
+    listProjectFiles,
+    uploadProjectFile,
+    getProjectFileContent,
+    downloadProjectFileUrl,
+    deleteProjectFiles,
   }
 }

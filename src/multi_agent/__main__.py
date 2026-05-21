@@ -73,7 +73,7 @@ async def async_main():
     pm = ProjectManager(user_dir, db)
 
     # Get project-specific directories
-    tools_dir = str(pm.get_tools_dir(args.project))
+    tools_dirs = [str(p) for p in pm.get_tools_dirs(args.project)]
     agents_dir = str(pm.get_agents_dir(args.project))
     prompts_dir = str(pm.get_prompts_dir(args.project))
 
@@ -82,7 +82,7 @@ async def async_main():
     set_prompt_loader(prompts_file=args.prompts_file, prompts_dir=prompts_dir)
 
     # Initialize loaders
-    tool_loader = ToolLoader(tools_dir=tools_dir)
+    tool_loader = ToolLoader(tools_dir=tools_dirs)
     tool_loader.load_tools()
 
     agent_loader = AgentLoader(

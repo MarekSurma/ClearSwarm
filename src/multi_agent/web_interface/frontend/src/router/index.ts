@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import RunnerPage from '@/pages/RunnerPage.vue'
 import VisualEditorPage from '@/pages/VisualEditorPage.vue'
 import ActionPlanPage from '@/pages/ActionPlanPage.vue'
+import ProjectFilesPage from '@/pages/ProjectFilesPage.vue'
 
 const routes = [
   {
@@ -21,6 +22,12 @@ const routes = [
     name: 'action-plans',
     component: ActionPlanPage,
     meta: { title: 'Action Plans' },
+  },
+  {
+    path: '/project-files',
+    name: 'project-files',
+    component: ProjectFilesPage,
+    meta: { title: 'Project Files' },
   },
 ]
 

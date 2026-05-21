@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount, onBeforeUpdate, nextTick, useAttrs } from 'vue'
-import { AGENT_ICON_PERSON, PROJECT_ICON_FOLDER } from '@/config/agentIcons'
+import { AGENT_ICON_PERSON_INLINE, PROJECT_ICON_FOLDER_INLINE, TOOL_ICON_GEAR_INLINE } from '@/config/agentIcons'
 
 defineOptions({
   inheritAttrs: false
@@ -11,17 +11,20 @@ const props = withDefaults(defineProps<{
   placeholder?: string
   projects?: string[]
   agents?: string[]
+  tools?: string[]
 }>(), {
   rows: 3,
   placeholder: '',
   projects: () => [],
-  agents: () => []
+  agents: () => [],
+  tools: () => []
 })
 
 const model = defineModel<string>({ required: true })
 
-const agentIconUrl = AGENT_ICON_PERSON
-const projectIconUrl = PROJECT_ICON_FOLDER
+const agentIconUrl = AGENT_ICON_PERSON_INLINE
+const projectIconUrl = PROJECT_ICON_FOLDER_INLINE
+const toolIconUrl = TOOL_ICON_GEAR_INLINE
 
 const emit = defineEmits<{
   'keydown.ctrl.enter': []
@@ -37,7 +40,7 @@ const passThroughAttrs = computed(() => {
 })
 
 const showSuggestions = ref(false)
-const suggestionTrigger = ref<'@' | '#' | null>(null)
+const suggestionTrigger = ref<'@' | '#' | '$' | null>(null)
 const suggestionQuery = ref('')
 const selectedSuggestionIndex = ref(0)
 const suggestionPosition = ref({ top: 0, left: 0 })
@@ -80,18 +83,26 @@ const mentionRegex = computed(() => {
   // Longest first so alternation doesn't prefer shorter prefixes.
   const sortedAgents = [...props.agents].sort((a, b) => b.length - a.length).map(escapeRegex)
   const sortedProjects = [...props.projects].sort((a, b) => b.length - a.length).map(escapeRegex)
+  const sortedTools = [...props.tools].sort((a, b) => b.length - a.length).map(escapeRegex)
 
-  const agentRe = sortedAgents.length > 0 ? `(@)(${sortedAgents.join('|')})(?![\\w-])` : null
-  const projectRe = sortedProjects.length > 0 ? `(#)(${sortedProjects.join('|')})(?![\\w-])` : null
+  // Boundary on both sides:
+  //   left  — only match when trigger is preceded by start-of-text or whitespace
+  //           (so "user@agent" inside an email is not highlighted)
+  //   right — name not followed by another word char, so "@agent_x" doesn't
+  //           render as the shorter "@agent".
+  const lead = '(?:^|(?<=\\s))'
+  const agentRe = sortedAgents.length > 0 ? `${lead}(@)(${sortedAgents.join('|')})(?![\\w-])` : null
+  const projectRe = sortedProjects.length > 0 ? `${lead}(#)(${sortedProjects.join('|')})(?![\\w-])` : null
+  const toolRe = sortedTools.length > 0 ? `${lead}(\\$)(${sortedTools.join('|')})(?![\\w-])` : null
 
-  const src = [agentRe, projectRe].filter(Boolean).join('|')
+  const src = [agentRe, projectRe, toolRe].filter(Boolean).join('|')
   if (!src) return null
   return new RegExp(src, 'g')
 })
 
 type Part =
   | { kind: 'text'; text: string }
-  | { kind: 'agent' | 'project'; trigger: string; name: string }
+  | { kind: 'agent' | 'project' | 'tool'; trigger: string; name: string }
 
 const highlightedParts = computed<Part[]>(() => {
   const text = model.value ?? ''
@@ -109,15 +120,19 @@ const highlightedParts = computed<Part[]>(() => {
     if (match.index > lastIndex) {
       parts.push({ kind: 'text', text: text.substring(lastIndex, match.index) })
     }
-    // Agent group is 1+2, project group is 3+4 (depending on which branch matched).
+    // Agent group is 1+2, project 3+4, tool 5+6 (depending on which branch matched).
     const agentTrig = match[1]
     const agentName = match[2]
     const projTrig = match[3]
     const projName = match[4]
+    const toolTrig = match[5]
+    const toolName = match[6]
     if (agentTrig) {
       parts.push({ kind: 'agent', trigger: agentTrig, name: agentName })
     } else if (projTrig) {
       parts.push({ kind: 'project', trigger: projTrig, name: projName })
+    } else if (toolTrig) {
+      parts.push({ kind: 'tool', trigger: toolTrig, name: toolName })
     }
     lastIndex = regex.lastIndex
   }
@@ -140,12 +155,13 @@ function handleInput(event: Event) {
 
   const lastAt = textBeforeCursor.lastIndexOf('@')
   const lastHash = textBeforeCursor.lastIndexOf('#')
-  const lastTriggerIndex = Math.max(lastAt, lastHash)
+  const lastDollar = textBeforeCursor.lastIndexOf('$')
+  const lastTriggerIndex = Math.max(lastAt, lastHash, lastDollar)
 
   if (lastTriggerIndex !== -1) {
     const charBefore = lastTriggerIndex === 0 ? '' : textBeforeCursor[lastTriggerIndex - 1]
     if (isBoundaryChar(charBefore)) {
-      const trigger = textBeforeCursor[lastTriggerIndex] as '@' | '#'
+      const trigger = textBeforeCursor[lastTriggerIndex] as '@' | '#' | '$'
       const query = textBeforeCursor.substring(lastTriggerIndex + 1)
       if (!query.includes(' ') && !query.includes('\n')) {
         suggestionTrigger.value = trigger
@@ -206,7 +222,11 @@ function updateSuggestionPosition(el: HTMLTextAreaElement, triggerIndex: number)
 }
 
 const filteredSuggestions = computed(() => {
-  const list = suggestionTrigger.value === '@' ? props.agents : props.projects
+  let list: string[]
+  if (suggestionTrigger.value === '@') list = props.agents
+  else if (suggestionTrigger.value === '#') list = props.projects
+  else if (suggestionTrigger.value === '$') list = props.tools
+  else list = []
   if (!suggestionQuery.value) return list
   const q = suggestionQuery.value.toLowerCase()
   return list.filter(item => item.toLowerCase().includes(q))
@@ -308,7 +328,8 @@ onBeforeUnmount(() => {
         <template v-for="(part, i) in highlightedParts" :key="i"
           ><template v-if="part.kind === 'text'">{{ part.text }}</template
           ><span v-else-if="part.kind === 'agent'" class="mention-bold mention-agent"><span class="mention-trigger-slot"><span class="mention-trigger-hidden">{{ part.trigger }}</span><img class="mention-icon" :src="agentIconUrl" alt="" aria-hidden="true" /></span>{{ part.name }}</span
-          ><span v-else class="mention-bold mention-project"><span class="mention-trigger-slot"><span class="mention-trigger-hidden">{{ part.trigger }}</span><img class="mention-icon" :src="projectIconUrl" alt="" aria-hidden="true" /></span>{{ part.name }}</span
+          ><span v-else-if="part.kind === 'project'" class="mention-bold mention-project"><span class="mention-trigger-slot"><span class="mention-trigger-hidden">{{ part.trigger }}</span><img class="mention-icon" :src="projectIconUrl" alt="" aria-hidden="true" /></span>{{ part.name }}</span
+          ><span v-else class="mention-bold mention-tool"><span class="mention-trigger-slot"><span class="mention-trigger-hidden">{{ part.trigger }}</span><img class="mention-icon" :src="toolIconUrl" alt="" aria-hidden="true" /></span>{{ part.name }}</span
         ></template>
         <br v-if="(model ?? '').endsWith('\n')" />
       </div>
@@ -373,11 +394,24 @@ onBeforeUnmount(() => {
   font-size: 1rem;
   line-height: 1.5;
   font-family: inherit;
+  /* Force identical glyph metrics on both layers. Without these, browsers
+     (and especially Firefox) can pick subtly different defaults for a
+     textarea vs a div, drifting them out of column-for-column alignment. */
+  font-weight: 400;
+  font-style: normal;
+  font-variant-ligatures: none;
+  letter-spacing: 0;
+  word-spacing: 0;
+  text-indent: 0;
+  text-transform: none;
+  tab-size: 4;
+  -moz-tab-size: 4;
   border: none;
   border-radius: inherit;
   box-sizing: border-box;
   white-space: pre-wrap;
   word-wrap: break-word;
+  overflow-wrap: break-word;
   outline: none;
 }
 
@@ -385,7 +419,11 @@ onBeforeUnmount(() => {
   position: relative;
   width: 100%;
   background: transparent;
-  color: var(--p-text-color, #333);
+  /* Hide rendered text in all browsers — only the caret should be visible;
+     the colored backdrop layer below carries the legible text. Without the
+     plain `color: transparent` Firefox renders the textarea's text on top
+     of the backdrop, producing a "double text" effect. */
+  color: transparent;
   -webkit-text-fill-color: transparent;
   caret-color: var(--p-text-color, #333);
   z-index: 2;
@@ -393,6 +431,27 @@ onBeforeUnmount(() => {
   overflow-y: auto;
   resize: none;
   cursor: text;
+  /* Hide the native scrollbar. The backdrop layer is `overflow: hidden` (no
+     scrollbar), so a visible scrollbar in the textarea would steal ~15px of
+     content width — only on the textarea — which makes lines wrap earlier
+     than the backdrop's lines. The user then sees ghost text at the end of
+     a line (with spellcheck underlines): textarea cursor sits past where
+     the backdrop renders text. Scrolling still works via wheel/keyboard. */
+  scrollbar-width: none;
+}
+
+.mention-editor-textarea::-webkit-scrollbar {
+  display: none;
+}
+
+/* Selection: paint only the highlight rectangle in the textarea; the
+   textarea text itself stays transparent so it doesn't double up with the
+   legible backdrop text underneath. The backdrop sits at a lower z-index
+   so the highlight rectangle still shows on top of the visible text. */
+.mention-editor-textarea::selection {
+  background: var(--p-highlight-background, rgba(59, 130, 246, 0.35));
+  color: transparent;
+  -webkit-text-fill-color: transparent;
 }
 
 .mention-editor-backdrop {
@@ -418,6 +477,14 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--p-primary-color) 12%, transparent);
   border-radius: 3px;
   white-space: nowrap;
+  /* Extend the pill's painted background ~0.75em to the LEFT (into the
+     whitespace that always precedes a mention — the regex enforces it) so
+     the icon, which is shifted left to leave a ~5px gap before the name,
+     visually sits inside the pill. The negative margin is balanced by the
+     matching padding, so the laid-out slot+name positions are unchanged
+     and the textarea/backdrop columns stay in sync. */
+  margin-inline-start: -0.75em;
+  padding-inline-start: 0.75em;
 }
 
 .mention-trigger-slot {
@@ -432,10 +499,16 @@ onBeforeUnmount(() => {
 .mention-icon {
   position: absolute;
   top: 50%;
-  left: 50%;
+  /* Anchor the icon's RIGHT edge ~3px (0.1875em) before the slot's right
+     edge, which is where the agent/project name starts. This gives a clear
+     visual gap between the icon and the name. The icon then overflows to
+     the LEFT into the pill's extended padding (see .mention-bold above),
+     so it still reads as part of the same pill. The translateY also nudges
+     the icon up by 2px for better optical centering against the text. */
+  right: 0.0625em;
+  transform: translateY(calc(-50% - 2px));
   width: 1em;
   height: 1em;
-  transform: translate(-50%, -50%);
   pointer-events: none;
   user-select: none;
 }

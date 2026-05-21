@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 
 from starlette.middleware.gzip import GZipMiddleware
 
-from .api import agents, executions, websocket, projects, schedules, graph_layouts
+from .api import agents, executions, websocket, projects, schedules, graph_layouts, files
 from ..core.llm_client import request_shutdown, reset_shutdown
 from ..core.database import get_database
 from ..core.project import ProjectManager
@@ -97,6 +97,7 @@ app.include_router(agents.router, prefix="/api", tags=["agents"])
 app.include_router(executions.router, prefix="/api", tags=["executions"])
 app.include_router(graph_layouts.router, prefix="/api", tags=["graph-layouts"])
 app.include_router(projects.router, prefix="/api", tags=["projects"])
+app.include_router(files.router, prefix="/api", tags=["files"])
 app.include_router(schedules.router, prefix="/api", tags=["schedules"])
 app.include_router(websocket.router, prefix="/ws", tags=["websocket"])
 
@@ -125,6 +126,15 @@ async def visual_editor_spa():
 @app.get("/action-plans", response_class=HTMLResponse)
 async def action_plans_spa():
     """SPA catch-all for Vue Router /action-plans route."""
+    index_file = STATIC_DIR / "index.html"
+    if index_file.exists():
+        return index_file.read_text(encoding='utf-8')
+    return "<h1>ClearSwarm Web Interface</h1><p>index.html not found</p>"
+
+
+@app.get("/project-files", response_class=HTMLResponse)
+async def project_files_spa():
+    """SPA catch-all for Vue Router /project-files route."""
     index_file = STATIC_DIR / "index.html"
     if index_file.exists():
         return index_file.read_text(encoding='utf-8')

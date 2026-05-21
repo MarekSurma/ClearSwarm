@@ -32,13 +32,20 @@ const isSaving = ref(false)
 
 const agentNames = computed(() => (props.agents || []).map(a => a.name))
 const projectNames = computed(() => projects.value.map(p => p.project_name))
+const toolNames = ref<string[]>([])
 
 watch(
   () => props.visible,
-  (visible) => {
+  async (visible) => {
     if (visible && props.agentDetail) {
       description.value = props.agentDetail.description
       systemPrompt.value = props.agentDetail.system_prompt
+      try {
+        const tools = await api.getTools()
+        toolNames.value = tools.map(t => t.name)
+      } catch {
+        toolNames.value = []
+      }
     }
   }
 )
@@ -114,6 +121,7 @@ function cancel() {
           :rows="10"
           :agents="agentNames"
           :projects="projectNames"
+          :tools="toolNames"
           placeholder="System prompt"
         />
       </div>

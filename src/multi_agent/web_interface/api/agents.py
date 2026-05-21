@@ -94,12 +94,12 @@ def get_loaders(project_dir: str = "default") -> Tuple[ToolLoader, AgentLoader, 
     pm = get_project_manager()
 
     # Get project-specific directories (with fallback for tools/prompts)
-    tools_dir = str(pm.get_tools_dir(project_dir))
+    tools_dirs = [str(p) for p in pm.get_tools_dirs(project_dir)]
     agents_dir = str(pm.get_agents_dir(project_dir))
     prompts_dir = str(pm.get_prompts_dir(project_dir))
 
     # Create loaders
-    tool_loader = ToolLoader(tools_dir=tools_dir)
+    tool_loader = ToolLoader(tools_dir=tools_dirs)
     tool_loader.load_tools()
 
     prompt_loader = PromptLoader(prompts_dir=prompts_dir)

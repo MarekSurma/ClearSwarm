@@ -10,13 +10,16 @@
     "type-check": "vue-tsc --noEmit"
   },
   "dependencies": {
-    "vue": "^3.5.0",
-    "vue-router": "^4.4.0",
-    "primevue": "^4.3.0",
     "@primevue/themes": "^4.3.0",
+    "@types/dompurify": "^3.0.5",
+    "dompurify": "^3.4.5",
+    "marked": "^18.0.3",
     "primeicons": "^7.0.0",
+    "primevue": "^4.3.0",
+    "vis-data": "^7.1.9",
     "vis-network": "^9.1.9",
-    "vis-data": "^7.1.9"
+    "vue": "^3.5.0",
+    "vue-router": "^4.4.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.0",

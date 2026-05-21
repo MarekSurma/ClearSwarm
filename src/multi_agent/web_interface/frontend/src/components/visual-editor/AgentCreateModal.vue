@@ -32,15 +32,22 @@ const isSaving = ref(false)
 
 const agentNames = computed(() => (props.agents || []).map(a => a.name))
 const projectNames = computed(() => projects.value.map(p => p.project_name))
+const toolNames = ref<string[]>([])
 
 watch(
   () => props.visible,
-  (visible) => {
+  async (visible) => {
     if (visible) {
       // Reset form when modal opens
       name.value = ''
       description.value = ''
       systemPrompt.value = ''
+      try {
+        const tools = await api.getTools()
+        toolNames.value = tools.map(t => t.name)
+      } catch {
+        toolNames.value = []
+      }
     }
   }
 )
@@ -145,7 +152,7 @@ function cancel() {
           :rows="12"
           :agents="agentNames"
           :projects="projectNames"
-          class="mono-editor"
+          :tools="toolNames"
           placeholder="Enter the system prompt that defines the agent's behavior..."
         />
       </div>
@@ -182,11 +189,5 @@ function cancel() {
   font-size: 0.75rem;
   color: var(--p-text-muted-color);
   margin-top: -0.25rem;
-}
-
-.mono-editor :deep(.mention-editor-textarea),
-.mono-editor :deep(.mention-editor-backdrop) {
-  font-family: 'Courier New', Courier, monospace;
-  font-size: 0.85rem;
 }
 </style>

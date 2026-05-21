@@ -313,6 +313,14 @@ onUnmounted(() => {
           <i class="pi pi-clock" />
           Action Plans
         </router-link>
+        <router-link
+          to="/project-files"
+          class="nav-link"
+          :class="{ active: route.name === 'project-files' }"
+        >
+          <i class="pi pi-folder" />
+          Project Files
+        </router-link>
       </div>
     </div>
 

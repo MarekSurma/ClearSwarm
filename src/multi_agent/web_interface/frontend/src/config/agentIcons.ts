@@ -7,6 +7,10 @@
 //   - AGENT_ICON_PERSON  — embedded agent silhouette
 //   - TOOL_ICON_FALLBACK — embedded gear, used as vis-network `brokenImage`
 //                          when a tool has no .svg next to its .py
+//   - AGENT_ICON_PERSON_INLINE / PROJECT_ICON_FOLDER_INLINE —
+//                          background-less variants for inline mention pills
+//                          (MentionEditor), so the glyph doesn't paint over
+//                          adjacent text.
 //
 // Palette is aligned with GRAPH_COLORS (see graphColors.ts).
 
@@ -28,6 +32,13 @@ const personBustSvg = `
     <circle cx="50" cy="38" r="17" fill="${AGENT_GLYPH}"/>
     <path d="M 14 100 Q 14 62 50 62 Q 86 62 86 100 Z" fill="${AGENT_GLYPH}"/>
   </g>
+</svg>
+`
+
+const personBustInlineSvg = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <circle cx="50" cy="38" r="17" fill="${AGENT_GLYPH}"/>
+  <path d="M 14 100 Q 14 62 50 62 Q 86 62 86 100 Z" fill="${AGENT_GLYPH}"/>
 </svg>
 `
 
@@ -61,6 +72,29 @@ const folderSvg = `
 </svg>
 `
 
+const folderInlineSvg = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <path d="M 8 28 L 8 82 Q 8 88 14 88 L 86 88 Q 92 88 92 82 L 92 38 Q 92 32 86 32 L 48 32 L 40 22 L 14 22 Q 8 22 8 28 Z"
+        fill="${PROJECT_GLYPH}" stroke="${PROJECT_STROKE}" stroke-width="3" stroke-linejoin="round"/>
+</svg>
+`
+
+const gearInlineSvg = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <g fill="${TOOL_GLYPH}" stroke="${TOOL_STROKE}" stroke-width="3" stroke-linejoin="round">
+    <circle cx="50" cy="50" r="22"/>
+    <rect x="44" y="10" width="12" height="14"/>
+    <rect x="44" y="76" width="12" height="14"/>
+    <rect x="10" y="44" width="14" height="12"/>
+    <rect x="76" y="44" width="14" height="12"/>
+  </g>
+  <circle cx="50" cy="50" r="8" fill="${TOOL_BG}" stroke="${TOOL_STROKE}" stroke-width="3"/>
+</svg>
+`
+
 export const AGENT_ICON_PERSON = svgDataUri(personBustSvg)
 export const TOOL_ICON_FALLBACK = svgDataUri(gearSvg)
 export const PROJECT_ICON_FOLDER = svgDataUri(folderSvg)
+export const AGENT_ICON_PERSON_INLINE = svgDataUri(personBustInlineSvg)
+export const PROJECT_ICON_FOLDER_INLINE = svgDataUri(folderInlineSvg)
+export const TOOL_ICON_GEAR_INLINE = svgDataUri(gearInlineSvg)

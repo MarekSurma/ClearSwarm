@@ -124,6 +124,26 @@ class ProjectManager:
         # Fallback to default
         return self.user_dir / "default" / "tools"
 
+    def get_tools_dirs(self, project_dir: str) -> List[Path]:
+        """
+        Get the ordered list of tool directories for a project.
+
+        Project tools supplement default tools; a file in the project's tools
+        directory with the same name as one in default overrides the default
+        file entirely (default is ignored for that filename).
+
+        Returns:
+            List of directories, with later entries overriding earlier ones.
+            Always includes the default tools directory; appends the project's
+            own tools directory if it exists and is distinct from default.
+        """
+        default_tools = self.user_dir / "default" / "tools"
+        project_tools = self.get_project_base_dir(project_dir) / "tools"
+        dirs: List[Path] = [default_tools]
+        if project_tools.exists() and project_tools.resolve() != default_tools.resolve():
+            dirs.append(project_tools)
+        return dirs
+
     def get_prompts_dir(self, project_dir: str) -> Path:
         """
         Get the prompts directory for a project with fallback to default.

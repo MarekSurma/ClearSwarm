@@ -85,10 +85,9 @@ onUnmounted(() => {
     :visible="visible"
     @update:visible="emit('update:visible', $event)"
     modal
-    maximizable
-    :maximized="true"
     header="ClearSwarm Visualizer"
-    :style="{ width: '95vw', height: '90vh' }"
+    class="graph-modal-fullscreen"
+    :style="{ width: '100vw', height: '100vh' }"
     :contentStyle="{ padding: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }"
   >
     <template #header>
@@ -278,5 +277,18 @@ onUnmounted(() => {
     flex-direction: column;
     align-items: stretch;
   }
+}
+</style>
+
+<style>
+.graph-modal-fullscreen {
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+  top: 0 !important;
+  left: 0 !important;
 }
 </style>

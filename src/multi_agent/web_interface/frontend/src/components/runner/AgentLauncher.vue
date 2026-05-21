@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import Select from 'primevue/select'
 import MentionEditor from '@/components/common/MentionEditor.vue'
 import Button from 'primevue/button'
@@ -33,6 +33,16 @@ const agentOptions = computed(() =>
 
 const agentNames = computed(() => props.agents.map(a => a.name))
 const projectNames = computed(() => projects.value.map(p => p.project_name))
+const toolNames = ref<string[]>([])
+
+onMounted(async () => {
+  try {
+    const tools = await api.getTools()
+    toolNames.value = tools.map(t => t.name)
+  } catch {
+    toolNames.value = []
+  }
+})
 
 const selectedAgentDescription = computed(() => {
   if (!selectedAgent.value) return ''
@@ -92,6 +102,7 @@ async function launchAgent() {
           :rows="4"
           :agents="agentNames"
           :projects="projectNames"
+          :tools="toolNames"
           @keydown.ctrl.enter="launchAgent"
         />
         <label for="message-input">Message</label>

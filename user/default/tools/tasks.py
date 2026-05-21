@@ -430,3 +430,35 @@ class TaskPickUpByNumberTool(BaseTool):
                 return f"Task {num:04d} picked up.\n\n{content}"
         except Exception as e:
             return f"Error picking up task: {e}"
+
+
+class TaskListPurgeTool(BaseTool):
+    @property
+    def name(self) -> str:
+        return "task_list_purge"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Deletes ALL task files in the current project. This action is irreversible. "
+            "Use with caution when you want to reset the task list completely."
+        )
+
+    def get_parameters_schema(self):
+        return {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+
+    def execute(self) -> str:
+        try:
+            with _lock_tasks(self.project_dir) as tasks_path:
+                files = list(tasks_path.glob("[0-9][0-9][0-9][0-9].txt"))
+                count = 0
+                for task_file in files:
+                    task_file.unlink()
+                    count += 1
+                return f"Successfully deleted {count} tasks. Task list is now empty."
+        except Exception as e:
+            return f"Error purging tasks: {e}"
