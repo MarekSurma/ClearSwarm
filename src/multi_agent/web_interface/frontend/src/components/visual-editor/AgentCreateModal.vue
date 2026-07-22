@@ -3,6 +3,7 @@ import { ref, watch, computed } from 'vue'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
+import Select from 'primevue/select'
 import MentionEditor from '@/components/common/MentionEditor.vue'
 import Button from 'primevue/button'
 import { useApi } from '@/composables/useApi'
@@ -10,6 +11,7 @@ import { useProject } from '@/composables/useProject'
 import { useToast } from 'primevue/usetoast'
 import { toDiskName } from '@/utils/nameFormatting'
 import type { AgentInfo } from '@/types/agent'
+import type { ModelConnectionInfo } from '@/types/modelConnection'
 
 const props = defineProps<{
   visible: boolean
@@ -28,11 +30,21 @@ const { projects } = useProject()
 const name = ref('')
 const description = ref('')
 const systemPrompt = ref('')
+const connectionId = ref('')
 const isSaving = ref(false)
 
 const agentNames = computed(() => (props.agents || []).map(a => a.name))
 const projectNames = computed(() => projects.value.map(p => p.project_name))
 const toolNames = ref<string[]>([])
+const connections = ref<ModelConnectionInfo[]>([])
+
+const connectionOptions = computed(() => [
+  { label: 'Default (environment config)', value: '' },
+  ...connections.value.map(c => ({
+    label: c.model ? `${c.name} — ${c.model}` : c.name,
+    value: c.connection_id,
+  })),
+])
 
 watch(
   () => props.visible,
@@ -42,11 +54,17 @@ watch(
       name.value = ''
       description.value = ''
       systemPrompt.value = ''
+      connectionId.value = ''
       try {
         const tools = await api.getTools()
         toolNames.value = tools.map(t => t.name)
       } catch {
         toolNames.value = []
+      }
+      try {
+        connections.value = await api.getModelConnections()
+      } catch {
+        connections.value = []
       }
     }
   }
@@ -84,6 +102,7 @@ async function save() {
       description: description.value.trim(),
       system_prompt: systemPrompt.value,
       tools: [], // New agents start with no tools
+      connection_id: connectionId.value,
     })
 
     toast.add({
@@ -142,6 +161,19 @@ function cancel() {
           class="w-full"
           placeholder="Brief description of what this agent does..."
         />
+      </div>
+
+      <div class="field">
+        <label for="new-agent-connection">Model Connection</label>
+        <Select
+          id="new-agent-connection"
+          v-model="connectionId"
+          :options="connectionOptions"
+          option-label="label"
+          option-value="value"
+          class="w-full"
+        />
+        <small class="hint">Which AI connection this agent runs on. Manage connections in System Settings.</small>
       </div>
 
       <div class="field">

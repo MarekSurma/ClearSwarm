@@ -66,6 +66,9 @@ class AgentConfig:
         self.description = self._load_file("description.txt")
         self.system_prompt = self._load_file("system_prompt.txt")
         self.tools = self._load_tools_list("tools.txt")
+        # Optional model connection this agent runs on (id of a row in
+        # model_connections). Empty string means "use the default env config".
+        self.connection_id = self._load_file("connection.txt")
 
     def _load_file(self, filename: str) -> str:
         """Load content from a file in agent directory."""
@@ -124,12 +127,23 @@ class Agent:
         # Get prompt loader instance (use provided or fallback to global)
         self.prompts = prompt_loader if prompt_loader is not None else get_prompt_loader()
 
-        # Initialize LLM client (with dependency injection support)
-        if llm_client is None:
-            Config.validate()
-            self.llm_client = OpenAILLMClient()
-        else:
+        # Resolve which model this agent calls. Defaults to the env config; a
+        # selected model connection overrides the api_key / base_url / model.
+        self.model = Config.OPENAI_MODEL
+
+        if llm_client is not None:
+            # Explicit dependency injection (e.g. tests) always wins.
             self.llm_client = llm_client
+        else:
+            connection = self._resolve_connection(getattr(config, 'connection_id', ''))
+            if connection is not None:
+                api_key, base_url, model = connection
+                self.llm_client = OpenAILLMClient(api_key=api_key, base_url=base_url)
+                if model:
+                    self.model = model
+            else:
+                Config.validate()
+                self.llm_client = OpenAILLMClient()
 
         # Per-agent cancellation event (checked by LLM streaming threads)
         self._cancel_event = threading.Event()
@@ -170,10 +184,29 @@ class Agent:
             "final_response": None,
             "total_iterations": None,
             "session_ended_explicitly": None,
-            "model": Config.OPENAI_MODEL,
+            "model": self.model,
             # interactions will be populated from self.messages at save time
             "interactions": []
         }
+
+    @staticmethod
+    def _resolve_connection(connection_id: str):
+        """
+        Resolve a model connection id to (api_key, base_url, model).
+
+        Returns None when no connection is selected or the referenced
+        connection no longer exists, so the caller falls back to the default
+        environment configuration.
+        """
+        if not connection_id:
+            return None
+        db = get_database()
+        connection = db.get_model_connection(connection_id)
+        if connection is None:
+            # Referenced connection was deleted; fall back to env defaults.
+            return None
+        api_key = db.get_model_connection_api_key(connection_id) or ""
+        return api_key, connection.get('base_url') or None, connection.get('model') or ""
 
     def _log(self, message: str, level: str = "INFO"):
         """
@@ -408,7 +441,7 @@ class Agent:
             # Use injected LLM client
             response_content, response_model, finish_reason = await self.llm_client.generate_stream(
                 messages=self.messages,
-                model=Config.OPENAI_MODEL,
+                model=self.model,
                 temperature=0.7,
                 on_stream_update=_on_stream_update,
                 cancel_event=self._cancel_event

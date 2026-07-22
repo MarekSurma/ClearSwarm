@@ -35,6 +35,9 @@ htmlcov/
 .env.*
 !.env.example
 
+# Secret encryption key for model connection API keys
+.clearswarm_secret.key
+
 # Database
 *.db
 

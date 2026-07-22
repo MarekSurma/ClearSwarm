@@ -3,6 +3,7 @@ import RunnerPage from '@/pages/RunnerPage.vue'
 import VisualEditorPage from '@/pages/VisualEditorPage.vue'
 import ActionPlanPage from '@/pages/ActionPlanPage.vue'
 import ProjectFilesPage from '@/pages/ProjectFilesPage.vue'
+import SystemSettingsPage from '@/pages/SystemSettingsPage.vue'
 
 const routes = [
   {
@@ -28,6 +29,12 @@ const routes = [
     name: 'project-files',
     component: ProjectFilesPage,
     meta: { title: 'Project Files' },
+  },
+  {
+    path: '/system-settings',
+    name: 'system-settings',
+    component: SystemSettingsPage,
+    meta: { title: 'System Settings' },
   },
 ]
 

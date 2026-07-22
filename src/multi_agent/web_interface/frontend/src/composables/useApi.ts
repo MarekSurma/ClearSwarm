@@ -3,6 +3,13 @@ import type { AgentExecution, ExecutionTree, ExecutionLog, ToolExecution } from 
 import type { GraphData, GraphResponse } from '@/types/graph'
 import type { ProjectInfo, CreateProjectRequest, CloneProjectRequest } from '@/types/project'
 import type { ScheduleInfo, CreateScheduleRequest, UpdateScheduleRequest } from '@/types/schedule'
+import type {
+  ModelConnectionInfo,
+  CreateModelConnectionRequest,
+  UpdateModelConnectionRequest,
+  ListModelsRequest,
+  ListModelsResponse,
+} from '@/types/modelConnection'
 import { useProject } from './useProject'
 
 const API_BASE = ''
@@ -253,6 +260,40 @@ export function useApi() {
       headers: { 'Content-Type': 'application/json' },
     })
 
+  // Model connections (global / system-wide)
+  const getModelConnections = () =>
+    request<ModelConnectionInfo[]>('/api/model-connections')
+  const getModelConnection = (id: string) =>
+    request<ModelConnectionInfo>(`/api/model-connections/${id}`)
+  const createModelConnection = (data: CreateModelConnectionRequest) =>
+    request<ModelConnectionInfo>('/api/model-connections', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+  const updateModelConnection = (id: string, data: UpdateModelConnectionRequest) =>
+    request<ModelConnectionInfo>(`/api/model-connections/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+  const deleteModelConnection = (id: string) =>
+    request<{ status: string; connection_id: string }>(`/api/model-connections/${id}`, {
+      method: 'DELETE',
+    })
+  const cloneModelConnection = (id: string, newName: string) =>
+    request<ModelConnectionInfo>(`/api/model-connections/${id}/clone`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ new_name: newName }),
+    })
+  const listConnectionModels = (data: ListModelsRequest) =>
+    request<ListModelsResponse>('/api/model-connections/list-models', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+
   return {
     getAgents,
     getAgent,
@@ -289,6 +330,13 @@ export function useApi() {
     updateSchedule,
     deleteSchedule,
     toggleSchedule,
+    getModelConnections,
+    getModelConnection,
+    createModelConnection,
+    updateModelConnection,
+    deleteModelConnection,
+    cloneModelConnection,
+    listConnectionModels,
     listProjectFiles,
     uploadProjectFile,
     getProjectFileContent,

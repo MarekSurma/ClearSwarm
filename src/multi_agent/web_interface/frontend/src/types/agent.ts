@@ -9,6 +9,7 @@ export interface AgentDetail {
   description: string
   system_prompt: string
   tools: string[]
+  connection_id: string
 }
 
 export interface CreateAgentRequest {
@@ -16,12 +17,14 @@ export interface CreateAgentRequest {
   description: string
   system_prompt: string
   tools: string[]
+  connection_id?: string
 }
 
 export interface UpdateAgentRequest {
   description: string
   system_prompt: string
   tools: string[]
+  connection_id?: string
 }
 
 export interface RunAgentRequest {

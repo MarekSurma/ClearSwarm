@@ -321,6 +321,14 @@ onUnmounted(() => {
           <i class="pi pi-folder" />
           Project Files
         </router-link>
+        <router-link
+          to="/system-settings"
+          class="nav-link"
+          :class="{ active: route.name === 'system-settings' }"
+        >
+          <i class="pi pi-cog" />
+          System Settings
+        </router-link>
       </div>
     </div>
 

@@ -182,7 +182,9 @@ export function useGraph() {
     })
 
     network.on('stabilizationIterationsDone', () => {
-      schedulePositionsSave()
+      // Don't persist half-built layouts while agents are still running;
+      // the final layout is saved when the run completes (see loadGraphData).
+      if (stats.value.running === 0) schedulePositionsSave()
     })
 
     network.on('dragEnd', () => {
@@ -191,14 +193,16 @@ export function useGraph() {
   }
 
   function applySavedPosition(visNode: any): any {
+    // Seed the node at its saved coordinates but keep physics enabled.
+    // Pinning (physics: false) injects one-sided momentum into the simulation
+    // when new nodes stream in, making the live graph drift and lose its
+    // springiness.
     const pos = savedPositions[visNode.id]
     if (pos) {
       visNode.x = pos.x
       visNode.y = pos.y
-      visNode.physics = false
-    } else {
-      visNode.physics = true
     }
+    visNode.physics = true
     return visNode
   }
 
@@ -529,6 +533,8 @@ export function useGraph() {
 
       if (wasRunning && !isNowRunning) {
         stopAutoRefresh()
+        // Run just finished — persist the settled layout
+        schedulePositionsSave()
       } else if (!wasRunning && isNowRunning) {
         startAutoRefresh()
       } else if (wasRunning && isNowRunning) {

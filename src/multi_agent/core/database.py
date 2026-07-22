@@ -2,6 +2,7 @@
 Database module for tracking agent execution.
 Uses SQLite to store agent execution history.
 """
+import re
 import sqlite3
 import uuid
 from datetime import datetime
@@ -76,6 +77,19 @@ class AgentDatabase:
                     enabled INTEGER NOT NULL DEFAULT 1,
                     last_run_at TEXT,
                     next_run_at TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+            """)
+
+            # Model connections table (global, OpenAI-compatible provider definitions)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS model_connections (
+                    connection_id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL UNIQUE,
+                    base_url TEXT NOT NULL,
+                    model TEXT NOT NULL DEFAULT '',
+                    api_key_encrypted TEXT NOT NULL DEFAULT '',
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 )
@@ -892,6 +906,222 @@ class AgentDatabase:
                 DELETE FROM schedules
                 WHERE schedule_id = ?
             """, (schedule_id,))
+            deleted = cursor.rowcount > 0
+            conn.commit()
+            return deleted
+
+    # ------------------------------------------------------------------
+    # Model connections (global OpenAI-compatible provider definitions)
+    # ------------------------------------------------------------------
+
+    _CONNECTION_NAME_RE = re.compile(r'^[A-Za-z0-9_-]+$')
+
+    def _validate_connection_name(self, name: str):
+        """Raise ValueError if the connection name is empty or has illegal chars."""
+        if not name or not self._CONNECTION_NAME_RE.match(name):
+            raise ValueError(
+                "Connection name may only contain letters, digits, hyphens and underscores"
+            )
+
+    def _row_to_connection(self, row) -> dict:
+        """Map a model_connections row to a public dict (never exposes the key)."""
+        return {
+            'connection_id': row[0],
+            'name': row[1],
+            'base_url': row[2],
+            'model': row[3],
+            'has_api_key': bool(row[4]),
+            'created_at': row[5],
+            'updated_at': row[6],
+        }
+
+    def create_model_connection(
+        self, name: str, base_url: str, model: str = "", api_key: str = ""
+    ) -> dict:
+        """
+        Create a new model connection.
+
+        Args:
+            name: Unique connection name (letters, digits, hyphens, underscores)
+            base_url: OpenAI-compatible base URL
+            model: Model identifier (may be empty)
+            api_key: Plaintext API key (stored encrypted, never read back)
+
+        Returns:
+            Public connection dict (without the key)
+
+        Raises:
+            ValueError: on invalid or duplicate name
+        """
+        from .crypto import encrypt_secret
+
+        self._validate_connection_name(name)
+
+        connection_id = str(uuid.uuid4())
+        now = datetime.now().isoformat()
+        encrypted = encrypt_secret(api_key or "")
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute("""
+                    INSERT INTO model_connections
+                    (connection_id, name, base_url, model, api_key_encrypted,
+                     created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (connection_id, name, base_url, model or "", encrypted, now, now))
+                conn.commit()
+            except sqlite3.IntegrityError:
+                raise ValueError(f"A connection named '{name}' already exists")
+
+        return self.get_model_connection(connection_id)
+
+    def get_model_connection(self, connection_id: str) -> Optional[dict]:
+        """Get a connection by ID (without the API key)."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT connection_id, name, base_url, model, api_key_encrypted,
+                       created_at, updated_at
+                FROM model_connections
+                WHERE connection_id = ?
+            """, (connection_id,))
+            row = cursor.fetchone()
+            return self._row_to_connection(row) if row else None
+
+    def get_all_model_connections(self) -> List[dict]:
+        """Get all connections (without API keys), newest first."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT connection_id, name, base_url, model, api_key_encrypted,
+                       created_at, updated_at
+                FROM model_connections
+                ORDER BY created_at DESC
+            """)
+            return [self._row_to_connection(row) for row in cursor.fetchall()]
+
+    def get_model_connection_api_key(self, connection_id: str) -> Optional[str]:
+        """
+        Internal: return the decrypted API key for a connection.
+
+        Used server-side only (model listing, agent wiring); never exposed via a
+        read endpoint. Returns None if the connection does not exist.
+        """
+        from .crypto import decrypt_secret
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT api_key_encrypted FROM model_connections
+                WHERE connection_id = ?
+            """, (connection_id,))
+            row = cursor.fetchone()
+            if row is None:
+                return None
+            return decrypt_secret(row[0]) if row[0] else ""
+
+    def update_model_connection(self, connection_id: str, **fields) -> Optional[dict]:
+        """
+        Update a connection.
+
+        Allowed fields: name, base_url, model, api_key. A blank/None api_key leaves
+        the existing key untouched (the key is write-only).
+
+        Returns:
+            Updated connection dict or None if not found.
+
+        Raises:
+            ValueError: on invalid or duplicate name.
+        """
+        from .crypto import encrypt_secret
+
+        current = self.get_model_connection(connection_id)
+        if not current:
+            return None
+
+        updates = {}
+        if fields.get('name') is not None:
+            self._validate_connection_name(fields['name'])
+            updates['name'] = fields['name']
+        if fields.get('base_url') is not None:
+            updates['base_url'] = fields['base_url']
+        if fields.get('model') is not None:
+            updates['model'] = fields['model']
+        # Only replace the key when a non-empty value is supplied.
+        if fields.get('api_key'):
+            updates['api_key_encrypted'] = encrypt_secret(fields['api_key'])
+
+        if not updates:
+            return current
+
+        updates['updated_at'] = datetime.now().isoformat()
+
+        set_clause = ', '.join(f"{k} = ?" for k in updates.keys())
+        values = list(updates.values()) + [connection_id]
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(f"""
+                    UPDATE model_connections
+                    SET {set_clause}
+                    WHERE connection_id = ?
+                """, values)
+                conn.commit()
+            except sqlite3.IntegrityError:
+                raise ValueError(
+                    f"A connection named '{updates.get('name')}' already exists"
+                )
+
+        return self.get_model_connection(connection_id)
+
+    def clone_model_connection(self, connection_id: str, new_name: str) -> Optional[dict]:
+        """
+        Clone a connection under a new name, carrying over the encrypted API key.
+
+        Returns:
+            New connection dict, or None if the source does not exist.
+
+        Raises:
+            ValueError: on invalid or duplicate new_name.
+        """
+        self._validate_connection_name(new_name)
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT base_url, model, api_key_encrypted
+                FROM model_connections
+                WHERE connection_id = ?
+            """, (connection_id,))
+            row = cursor.fetchone()
+            if row is None:
+                return None
+
+            new_id = str(uuid.uuid4())
+            now = datetime.now().isoformat()
+            try:
+                cursor.execute("""
+                    INSERT INTO model_connections
+                    (connection_id, name, base_url, model, api_key_encrypted,
+                     created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (new_id, new_name, row[0], row[1], row[2], now, now))
+                conn.commit()
+            except sqlite3.IntegrityError:
+                raise ValueError(f"A connection named '{new_name}' already exists")
+
+        return self.get_model_connection(new_id)
+
+    def delete_model_connection(self, connection_id: str) -> bool:
+        """Delete a connection. Returns True if a row was removed."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                DELETE FROM model_connections
+                WHERE connection_id = ?
+            """, (connection_id,))
             deleted = cursor.rowcount > 0
             conn.commit()
             return deleted

@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 
 from starlette.middleware.gzip import GZipMiddleware
 
-from .api import agents, executions, websocket, projects, schedules, graph_layouts, files
+from .api import agents, executions, websocket, projects, schedules, graph_layouts, files, model_connections
 from ..core.llm_client import request_shutdown, reset_shutdown
 from ..core.database import get_database
 from ..core.project import ProjectManager
@@ -99,6 +99,7 @@ app.include_router(graph_layouts.router, prefix="/api", tags=["graph-layouts"])
 app.include_router(projects.router, prefix="/api", tags=["projects"])
 app.include_router(files.router, prefix="/api", tags=["files"])
 app.include_router(schedules.router, prefix="/api", tags=["schedules"])
+app.include_router(model_connections.router, prefix="/api", tags=["model-connections"])
 app.include_router(websocket.router, prefix="/ws", tags=["websocket"])
 
 # Mount static files

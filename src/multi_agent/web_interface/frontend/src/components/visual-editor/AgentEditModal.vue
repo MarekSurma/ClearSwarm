@@ -3,12 +3,14 @@ import { ref, watch, computed } from 'vue'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
+import Select from 'primevue/select'
 import MentionEditor from '@/components/common/MentionEditor.vue'
 import Button from 'primevue/button'
 import { useApi } from '@/composables/useApi'
 import { useProject } from '@/composables/useProject'
 import { useToast } from 'primevue/usetoast'
 import type { AgentDetail, AgentInfo } from '@/types/agent'
+import type { ModelConnectionInfo } from '@/types/modelConnection'
 import { toDisplayName } from '@/utils/nameFormatting'
 
 const props = defineProps<{
@@ -28,11 +30,21 @@ const { projects } = useProject()
 
 const description = ref('')
 const systemPrompt = ref('')
+const connectionId = ref('')
 const isSaving = ref(false)
 
 const agentNames = computed(() => (props.agents || []).map(a => a.name))
 const projectNames = computed(() => projects.value.map(p => p.project_name))
 const toolNames = ref<string[]>([])
+const connections = ref<ModelConnectionInfo[]>([])
+
+const connectionOptions = computed(() => [
+  { label: 'Default (environment config)', value: '' },
+  ...connections.value.map(c => ({
+    label: c.model ? `${c.name} — ${c.model}` : c.name,
+    value: c.connection_id,
+  })),
+])
 
 watch(
   () => props.visible,
@@ -40,11 +52,17 @@ watch(
     if (visible && props.agentDetail) {
       description.value = props.agentDetail.description
       systemPrompt.value = props.agentDetail.system_prompt
+      connectionId.value = props.agentDetail.connection_id || ''
       try {
         const tools = await api.getTools()
         toolNames.value = tools.map(t => t.name)
       } catch {
         toolNames.value = []
+      }
+      try {
+        connections.value = await api.getModelConnections()
+      } catch {
+        connections.value = []
       }
     }
   }
@@ -60,6 +78,7 @@ async function save() {
       description: description.value,
       system_prompt: systemPrompt.value,
       tools: props.agentDetail.tools, // Keep tools unchanged
+      connection_id: connectionId.value,
     })
 
     toast.add({
@@ -114,6 +133,19 @@ function cancel() {
       </div>
 
       <div class="field">
+        <label for="agent-connection">Model Connection</label>
+        <Select
+          id="agent-connection"
+          v-model="connectionId"
+          :options="connectionOptions"
+          option-label="label"
+          option-value="value"
+          class="w-full"
+        />
+        <small class="hint">Which AI connection this agent runs on. Manage connections in System Settings.</small>
+      </div>
+
+      <div class="field">
         <label for="agent-system-prompt">System Prompt</label>
         <MentionEditor
           id="agent-system-prompt"
@@ -152,5 +184,11 @@ function cancel() {
   font-weight: 500;
   font-size: 0.9rem;
   color: var(--p-text-color);
+}
+
+.hint {
+  font-size: 0.75rem;
+  color: var(--p-text-muted-color);
+  margin-top: -0.25rem;
 }
 </style>

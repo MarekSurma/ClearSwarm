@@ -146,6 +146,7 @@ class AgentDetail(BaseModel):
     description: str
     system_prompt: str
     tools: List[str]
+    connection_id: str = ""
 
 
 class CreateAgentRequest(BaseModel):
@@ -154,6 +155,7 @@ class CreateAgentRequest(BaseModel):
     description: str
     system_prompt: str
     tools: List[str]
+    connection_id: str = ""
 
 
 class UpdateAgentRequest(BaseModel):
@@ -161,6 +163,7 @@ class UpdateAgentRequest(BaseModel):
     description: str
     system_prompt: str
     tools: List[str]
+    connection_id: str = ""
 
 
 class RunAgentRequest(BaseModel):
@@ -406,9 +409,11 @@ async def get_agent_detail(agent_name: str, project: str = Query("default")):
     description_file = agent_dir / "description.txt"
     system_prompt_file = agent_dir / "system_prompt.txt"
     tools_file = agent_dir / "tools.txt"
+    connection_file = agent_dir / "connection.txt"
 
     description = description_file.read_text(encoding='utf-8').strip() if description_file.exists() else ""
     system_prompt = system_prompt_file.read_text(encoding='utf-8') if system_prompt_file.exists() else ""
+    connection_id = connection_file.read_text(encoding='utf-8').strip() if connection_file.exists() else ""
     tools = []
     if tools_file.exists():
         tools = [line.strip() for line in tools_file.read_text(encoding='utf-8').splitlines() if line.strip()]
@@ -419,7 +424,8 @@ async def get_agent_detail(agent_name: str, project: str = Query("default")):
         name=agent_name,
         description=description,
         system_prompt=system_prompt,
-        tools=tools
+        tools=tools,
+        connection_id=connection_id
     )
 
 
@@ -447,6 +453,7 @@ async def create_agent(request: CreateAgentRequest, project: str = Query("defaul
         (agent_dir / "description.txt").write_text(request.description, encoding='utf-8')
         (agent_dir / "system_prompt.txt").write_text(request.system_prompt, encoding='utf-8')
         (agent_dir / "tools.txt").write_text('\n'.join(tools), encoding='utf-8')
+        (agent_dir / "connection.txt").write_text(request.connection_id or "", encoding='utf-8')
 
         # Reset loaders to pick up new agent
         reset_loaders(project)
@@ -455,7 +462,8 @@ async def create_agent(request: CreateAgentRequest, project: str = Query("defaul
             name=request.name,
             description=request.description,
             system_prompt=request.system_prompt,
-            tools=tools
+            tools=tools,
+            connection_id=request.connection_id or ""
         )
     except Exception as e:
         # Clean up on failure
@@ -479,6 +487,7 @@ async def update_agent(agent_name: str, request: UpdateAgentRequest, project: st
         (agent_dir / "description.txt").write_text(request.description, encoding='utf-8')
         (agent_dir / "system_prompt.txt").write_text(request.system_prompt, encoding='utf-8')
         (agent_dir / "tools.txt").write_text('\n'.join(tools), encoding='utf-8')
+        (agent_dir / "connection.txt").write_text(request.connection_id or "", encoding='utf-8')
 
         # Reset loaders to pick up changes
         reset_loaders(project)
@@ -487,7 +496,8 @@ async def update_agent(agent_name: str, request: UpdateAgentRequest, project: st
             name=agent_name,
             description=request.description,
             system_prompt=request.system_prompt,
-            tools=tools
+            tools=tools,
+            connection_id=request.connection_id or ""
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update agent: {str(e)}")
@@ -528,12 +538,15 @@ async def clone_agent(agent_name: str, request: CloneAgentRequest, project: str 
         system_prompt = (clone_dir / "system_prompt.txt").read_text(encoding='utf-8')
         tools_file = clone_dir / "tools.txt"
         tools = [line.strip() for line in tools_file.read_text(encoding='utf-8').splitlines() if line.strip()] if tools_file.exists() else []
+        connection_file = clone_dir / "connection.txt"
+        connection_id = connection_file.read_text(encoding='utf-8').strip() if connection_file.exists() else ""
 
         return AgentDetail(
             name=new_name,
             description=description,
             system_prompt=system_prompt,
-            tools=tools
+            tools=tools,
+            connection_id=connection_id
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to clone agent: {str(e)}")
